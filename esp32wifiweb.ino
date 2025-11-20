@@ -10,8 +10,15 @@
 #include <PololuMaestro.h>
 MiniMaestro maestro(Serial1);
 
-// internal LED for testing
-const int internal_led = 13;
+// FastLED library
+#include <FastLED.h>
+
+// LED Strip Configuration
+#define NUM_LEDS 3
+#define LED_PIN 5  // Change this to your desired GPIO pin
+#define LED_TYPE WS2812B
+#define COLOR_ORDER GRB
+CRGB leds[NUM_LEDS];
 
 // Replace with your network credentials
 const char* ssid = "beskar-5";
@@ -48,9 +55,11 @@ void setup() {
   Serial.begin(115200);
   Serial1.begin(9600);
 
-  // internal led for testing
-  pinMode(internal_led, OUTPUT);
-  digitalWrite(internal_led, LOW);
+  // Initialize FastLED
+  FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS);
+  FastLED.setBrightness(50);  // Set brightness (0-255)
+  FastLED.clear();
+  FastLED.show();
 
   // Connect to Wi-Fi network with SSID and password
   Serial.print("Connecting to ");
@@ -66,6 +75,31 @@ void setup() {
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
   server.begin();
+}
+
+// Helper function to set emotion state
+void setEmotion(String emotionName, CRGB color, int scriptNumber) {
+  Serial.print("Activating maestro sequence ");
+  Serial.print(scriptNumber);
+  Serial.print(" (");
+  Serial.print(emotionName);
+  Serial.println(")");
+  Serial.print("Eyes ");
+  Serial.println(color == CRGB::Black ? "Off" : 
+                 color == CRGB::White ? "White" :
+                 color == CRGB::Green ? "Green" :
+                 color == CRGB::Yellow ? "Yellow" :
+                 color == CRGB::Red ? "Red" : "Unknown");
+  leds[0] = color;  // LED 1
+  leds[1] = color;  // LED 2
+  leds[2] = CRGB::Black;  // LED 3 always off
+  FastLED.show();
+  maestro.restartScript(scriptNumber);
+}
+
+// Helper function to generate emotion button HTML
+void createEmotionButton(WiFiClient &client, String emotion, String label) {
+  client.println("<p><a href=\"/maestro/" + emotion + "\"><button class=\"button\">" + label + "</button></a></p>");
 }
 
 void loop(){
@@ -93,25 +127,17 @@ void loop(){
             client.println("Connection: close");
             client.println();
             
-            // turns the GPIOs on and off
+            // Handle emotion requests
             if (header.indexOf("GET /maestro/sleep") >= 0) {
-              Serial.println("Activating maestro sequence 0 (sleep)");
-              Serial.println("Eyes Off");
-              digitalWrite(internal_led, LOW);
-              maestro.restartScript(0);
+              setEmotion("sleep", CRGB::Black, 0);
             } else if (header.indexOf("GET /maestro/wake") >= 0) {
-              Serial.println("Activating maestro sequence 1 (wake)");
-              Serial.println("Eyes White");
-              digitalWrite(internal_led, HIGH);
-              maestro.restartScript(1);
+              setEmotion("wake", CRGB::White, 1);
             } else if (header.indexOf("GET /maestro/happy") >= 0) {
-              Serial.println("Activating maestro sequence 2 (happy)");
-              Serial.println("Eyes Green");              
-              maestro.restartScript(2);
+              setEmotion("happy", CRGB::Green, 2);
             } else if (header.indexOf("GET /maestro/curious") >= 0) {
-              Serial.println("Activating maestro sequence 3 (curious)");
-              Serial.println("Eyes Yellow");
-              maestro.restartScript(3);
+              setEmotion("curious", CRGB::Yellow, 3);
+            } else if (header.indexOf("GET /maestro/angry") >= 0) {
+              setEmotion("angry", CRGB::Red, 4);
           }
             
             
@@ -131,10 +157,11 @@ void loop(){
             client.println("<body><h1>" + droidname + " Control System</h1>");
 
             // emote buttons
-            client.println("<p><a href=\"/maestro/sleep\"><button class=\"button\">go to sleep</button></a></p>");
-            client.println("<p><a href=\"/maestro/wake\"><button class=\"button\">wake up</button></a></p>");
-            client.println("<p><a href=\"/maestro/happy\"><button class=\"button\">happy</button></a></p>");
-            client.println("<p><a href=\"/maestro/curious\"><button class=\"button\">curious</button></a></p>");
+            createEmotionButton(client, "sleep", "go to sleep");
+            createEmotionButton(client, "wake", "wake up");
+            createEmotionButton(client, "happy", "happy");
+            createEmotionButton(client, "curious", "curious");
+            createEmotionButton(client, "angry", "angry");
 
             client.println("</body></html>");
             
