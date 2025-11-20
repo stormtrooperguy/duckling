@@ -20,17 +20,22 @@ struct Emotion {
   const char* path;        // URL path (e.g., "sleep")
   const char* label;       // Button label (e.g., "go to sleep")
   const char* colorName;   // Color name for serial output
-  CRGB color;              // LED color
-  int scriptNumber;        // Maestro script number
+  CRGB color;              // LED color for LEDs 1 & 2
+  CRGB led3Color;          // LED 3 color (separate control)
+  bool preserveLED12;      // If true, don't change LEDs 1 & 2
+  int scriptNumber;        // Maestro script number (-1 = no script)
 };
 
 // Define all emotions in one place
 const Emotion emotions[] = {
-  {"sleep",   "go to sleep", "Off",    CRGB::Black,  0},
-  {"wake",    "wake up",     "White",  CRGB::White,  1},
-  {"happy",   "happy",       "Green",  CRGB::Green,  2},
-  {"curious", "curious",     "Yellow", CRGB::Yellow, 3},
-  {"angry",   "angry",       "Red",    CRGB::Red,    4}
+  // path          label           colorName  LED1&2 color   LED3 color      preserve12  script#
+  {"sleep",        "go to sleep",  "Off",     CRGB::Black,   CRGB::Black,    false,      0},
+  {"wake",         "wake up",      "White",   CRGB::White,   CRGB::Black,    false,      1},
+  {"happy",        "happy",        "Green",   CRGB::Green,   CRGB::Black,    false,      2},
+  {"curious",      "curious",      "Yellow",  CRGB::Yellow,  CRGB::Black,    false,      3},
+  {"angry",        "angry",        "Red",     CRGB::Red,     CRGB::Black,    false,      4},
+  {"flashlight_on",  "flashlight on",  "Flashlight On",  CRGB::Black, CRGB::White, true, -1},
+  {"flashlight_off", "flashlight off", "Flashlight Off", CRGB::Black, CRGB::Black, true, -1}
 };
 const int numEmotions = sizeof(emotions) / sizeof(emotions[0]);
 
@@ -96,27 +101,38 @@ void setup() {
 
 // Helper function to set emotion state
 void setEmotion(const Emotion &emotion) {
-  Serial.print("Activating maestro sequence ");
-  Serial.print(emotion.scriptNumber);
-  Serial.print(" (");
-  Serial.print(emotion.path);
-  Serial.println(")");
+  Serial.print("Setting emotion: ");
+  Serial.println(emotion.path);
+  
+  // Set LED colors
   Serial.print("Eyes ");
   Serial.println(emotion.colorName);
-  leds[0] = emotion.color;  // LED 1
-  leds[1] = emotion.color;  // LED 2
-  leds[2] = CRGB::Black;     // LED 3 always off
+  
+  // Only update LEDs 1 & 2 if not preserving their state
+  if (!emotion.preserveLED12) {
+    leds[0] = emotion.color;  // LED 1
+    leds[1] = emotion.color;  // LED 2
+  }
+  
+  // Always update LED 3
+  leds[2] = emotion.led3Color;
   FastLED.show();
-  maestro.restartScript(emotion.scriptNumber);
+  
+  // Only trigger maestro script if specified (scriptNumber >= 0)
+  if (emotion.scriptNumber >= 0) {
+    Serial.print("Activating maestro sequence ");
+    Serial.println(emotion.scriptNumber);
+    maestro.restartScript(emotion.scriptNumber);
+  }
 }
 
 // Helper function to generate emotion button HTML
 void createEmotionButton(WiFiClient &client, const Emotion &emotion) {
-  client.print("<p><a href=\"/maestro/");
+  client.print("<a href=\"/maestro/");
   client.print(emotion.path);
-  client.print("\"><button class=\"button\">");
+  client.print("\" class=\"button\">");
   client.print(emotion.label);
-  client.println("</button></a></p>");
+  client.println("</a>");
 }
 
 void loop(){
@@ -159,27 +175,34 @@ void loop(){
             client.println("<!DOCTYPE html><html>");
             client.println("<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
             client.println("<link rel=\"icon\" href=\"data:,\">");
-            // CSS to style the on/off buttons 
-            // Feel free to change the background-color and font-size attributes to fit your preferences
+            // CSS optimized for landscape tablet
             client.println("<style>");
-            client.println("html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}");
+            client.println("* { margin: 0; padding: 0; box-sizing: border-box; }");
+            client.println("html { font-family: Helvetica, Arial, sans-serif; }");
+            client.println("body { background-color: #1a1a1a; color: #ffffff; padding: 20px; }");
+            client.println("h1 { text-align: center; margin-bottom: 30px; font-size: 48px; }");
+            client.println(".button-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; max-width: 1200px; margin: 0 auto; }");
             client.print(".button { background-color: ");
             client.print(droidcolor);
-            client.println("; border: none; color: white; padding: 16px 40px;");
-            client.println("text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer;}");
+            client.println("; border: none; border-radius: 12px; color: white; padding: 30px 20px;");
+            client.println("text-decoration: none; font-size: 28px; font-weight: bold; cursor: pointer;");
+            client.println("transition: all 0.3s; display: block; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }");
+            client.println(".button:hover { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(0,0,0,0.4); opacity: 0.9; }");
+            client.println(".button:active { transform: translateY(0); box-shadow: 0 2px 4px rgba(0,0,0,0.3); }");
             client.println("</style></head>");
             
             // Web Page Heading
             client.print("<body><h1>");
             client.print(droidname);
             client.println(" Control System</h1>");
+            client.println("<div class=\"button-grid\">");
 
             // emote buttons
             for (int i = 0; i < numEmotions; i++) {
               createEmotionButton(client, emotions[i]);
             }
 
-            client.println("</body></html>");
+            client.println("</div></body></html>");
             
             // The HTTP response ends with another blank line
             client.println();
