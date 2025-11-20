@@ -15,8 +15,8 @@ MiniMaestro maestro(Serial1);
 #define COLOR_ORDER GRB
 CRGB leds[NUM_LEDS];
 
-// Emotion definition structure
-struct Emotion {
+// Emote definition structure
+struct Emote {
   const char* path;        // URL path (e.g., "sleep")
   const char* label;       // Button label (e.g., "go to sleep")
   const char* colorName;   // Color name for serial output
@@ -26,18 +26,25 @@ struct Emotion {
   int scriptNumber;        // Maestro script number (-1 = no script)
 };
 
-// Define all emotions in one place
-const Emotion emotions[] = {
+// Define all emotes in one place
+const Emote emotes[] = {
   // path          label           colorName  LED1&2 color   LED3 color      preserve12  script#
   {"sleep",        "go to sleep",  "Off",     CRGB::Black,   CRGB::Black,    false,      0},
   {"wake",         "wake up",      "White",   CRGB::White,   CRGB::Black,    false,      1},
   {"happy",        "happy",        "Green",   CRGB::Green,   CRGB::Black,    false,      2},
   {"curious",      "curious",      "Yellow",  CRGB::Yellow,  CRGB::Black,    false,      3},
   {"angry",        "angry",        "Red",     CRGB::Red,     CRGB::Black,    false,      4},
+  {"sad",          "sad",          "Blue",    CRGB::Blue,    CRGB::Black,    false,      5},
+  {"idle",         "idle",         "White",   CRGB::White,   CRGB::Black,    false,      6},
+  {"lookleft",     "look left",    "White",   CRGB::White,   CRGB::Black,    true,       7},
+  {"lookright",    "look right",   "White",   CRGB::White,   CRGB::Black,    true,       8},
+  {"lookup",       "look up",      "White",   CRGB::White,   CRGB::Black,    true,       9},
+  {"lookdown",     "look down",    "White",   CRGB::White,   CRGB::Black,    true,      10},
+  {"scared",       "scared",       "Purple",  CRGB::Purple,  CRGB::Black,    false,     11},
   {"flashlight_on",  "flashlight on",  "Flashlight On",  CRGB::Black, CRGB::White, true, -1},
   {"flashlight_off", "flashlight off", "Flashlight Off", CRGB::Black, CRGB::Black, true, -1}
 };
-const int numEmotions = sizeof(emotions) / sizeof(emotions[0]);
+const int numEmotes = sizeof(emotes) / sizeof(emotes[0]);
 
 // Replace these strings to customize for your droid
 String droidname = "Grek";
@@ -99,39 +106,39 @@ void setup() {
   server.begin();
 }
 
-// Helper function to set emotion state
-void setEmotion(const Emotion &emotion) {
-  Serial.print("Setting emotion: ");
-  Serial.println(emotion.path);
+// Helper function to set emote state
+void setEmote(const Emote &emote) {
+  Serial.print("Setting emote: ");
+  Serial.println(emote.path);
   
   // Set LED colors
   Serial.print("Eyes ");
-  Serial.println(emotion.colorName);
+  Serial.println(emote.colorName);
   
   // Only update LEDs 1 & 2 if not preserving their state
-  if (!emotion.preserveLED12) {
-    leds[0] = emotion.color;  // LED 1
-    leds[1] = emotion.color;  // LED 2
+  if (!emote.preserveLED12) {
+    leds[0] = emote.color;  // LED 1
+    leds[1] = emote.color;  // LED 2
   }
   
   // Always update LED 3
-  leds[2] = emotion.led3Color;
+  leds[2] = emote.led3Color;
   FastLED.show();
   
   // Only trigger maestro script if specified (scriptNumber >= 0)
-  if (emotion.scriptNumber >= 0) {
+  if (emote.scriptNumber >= 0) {
     Serial.print("Activating maestro sequence ");
-    Serial.println(emotion.scriptNumber);
-    maestro.restartScript(emotion.scriptNumber);
+    Serial.println(emote.scriptNumber);
+    maestro.restartScript(emote.scriptNumber);
   }
 }
 
-// Helper function to generate emotion button HTML
-void createEmotionButton(WiFiClient &client, const Emotion &emotion) {
+// Helper function to generate emote button HTML
+void createEmoteButton(WiFiClient &client, const Emote &emote) {
   client.print("<a href=\"/maestro/");
-  client.print(emotion.path);
+  client.print(emote.path);
   client.print("\" class=\"button\">");
-  client.print(emotion.label);
+  client.print(emote.label);
   client.println("</a>");
 }
 
@@ -160,12 +167,12 @@ void loop(){
             client.println("Connection: close");
             client.println();
             
-            // Handle emotion requests
-            for (int i = 0; i < numEmotions; i++) {
+            // Handle emote requests
+            for (int i = 0; i < numEmotes; i++) {
               String path = "/maestro/";
-              path += emotions[i].path;
+              path += emotes[i].path;
               if (header.indexOf("GET " + path) >= 0) {
-                setEmotion(emotions[i]);
+                setEmote(emotes[i]);
                 break;
               }
             }
@@ -198,8 +205,8 @@ void loop(){
             client.println("<div class=\"button-grid\">");
 
             // emote buttons
-            for (int i = 0; i < numEmotions; i++) {
-              createEmotionButton(client, emotions[i]);
+            for (int i = 0; i < numEmotes; i++) {
+              createEmoteButton(client, emotes[i]);
             }
 
             client.println("</div></body></html>");
