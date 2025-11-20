@@ -1,8 +1,3 @@
-/*********
-  Rui Santos
-  Complete project details at https://randomnerdtutorials.com  
-*********/
-
 // Load Wi-Fi library
 #include <WiFi.h>
 
@@ -20,29 +15,39 @@ MiniMaestro maestro(Serial1);
 #define COLOR_ORDER GRB
 CRGB leds[NUM_LEDS];
 
-// Replace with your network credentials
-const char* ssid = "beskar-5";
-const char* password = "mandalore";
+// Emotion definition structure
+struct Emotion {
+  const char* path;        // URL path (e.g., "sleep")
+  const char* label;       // Button label (e.g., "go to sleep")
+  const char* colorName;   // Color name for serial output
+  CRGB color;              // LED color
+  int scriptNumber;        // Maestro script number
+};
+
+// Define all emotions in one place
+const Emotion emotions[] = {
+  {"sleep",   "go to sleep", "Off",    CRGB::Black,  0},
+  {"wake",    "wake up",     "White",  CRGB::White,  1},
+  {"happy",   "happy",       "Green",  CRGB::Green,  2},
+  {"curious", "curious",     "Yellow", CRGB::Yellow, 3},
+  {"angry",   "angry",       "Red",    CRGB::Red,    4}
+};
+const int numEmotions = sizeof(emotions) / sizeof(emotions[0]);
 
 // Replace these strings to customize for your droid
 String droidname = "Grek";
 String droidcolor = "green";
+
+// Access Point credentials
+// SSID will use droidname, password is randomly generated
+// Change this password for security
+const char* ap_password = "k7Rm9pQx2w";
 
 // Set web server port number to 80
 WiFiServer server(80);
 
 // Variable to store the HTTP request
 String header;
-
-// Auxiliar variables to store the current output state
-String output26State = "off";
-String output27State = "off";
-
-
-
-// Assign output variables to GPIO pins
-const int output26 = 26;
-const int output27 = 27;
 
 // Current time
 unsigned long currentTime = millis();
@@ -61,45 +66,57 @@ void setup() {
   FastLED.clear();
   FastLED.show();
 
-  // Connect to Wi-Fi network with SSID and password
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  // Print local IP address and start web server
+  // Configure Access Point
+  Serial.println("Configuring Access Point...");
+  
+  // Set static IP configuration (192.168.4.0/24 network)
+  IPAddress local_IP(192, 168, 4, 1);
+  IPAddress gateway(192, 168, 4, 1);
+  IPAddress subnet(255, 255, 255, 0);
+  
+  // Configure the soft AP with static IP
+  WiFi.softAPConfig(local_IP, gateway, subnet);
+  
+  // Start Access Point
+  WiFi.softAP(droidname.c_str(), ap_password);
+  
+  // Print AP information
   Serial.println("");
-  Serial.println("WiFi connected.");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
+  Serial.println("Access Point started!");
+  Serial.print("SSID: ");
+  Serial.println(droidname);
+  Serial.print("Password: ");
+  Serial.println(ap_password);
+  Serial.print("AP IP address: ");
+  Serial.println(WiFi.softAPIP());
+  Serial.println("Connect to this network and navigate to http://192.168.4.1");
+  
   server.begin();
 }
 
 // Helper function to set emotion state
-void setEmotion(String emotionName, CRGB color, int scriptNumber) {
+void setEmotion(const Emotion &emotion) {
   Serial.print("Activating maestro sequence ");
-  Serial.print(scriptNumber);
+  Serial.print(emotion.scriptNumber);
   Serial.print(" (");
-  Serial.print(emotionName);
+  Serial.print(emotion.path);
   Serial.println(")");
   Serial.print("Eyes ");
-  Serial.println(color == CRGB::Black ? "Off" : 
-                 color == CRGB::White ? "White" :
-                 color == CRGB::Green ? "Green" :
-                 color == CRGB::Yellow ? "Yellow" :
-                 color == CRGB::Red ? "Red" : "Unknown");
-  leds[0] = color;  // LED 1
-  leds[1] = color;  // LED 2
-  leds[2] = CRGB::Black;  // LED 3 always off
+  Serial.println(emotion.colorName);
+  leds[0] = emotion.color;  // LED 1
+  leds[1] = emotion.color;  // LED 2
+  leds[2] = CRGB::Black;     // LED 3 always off
   FastLED.show();
-  maestro.restartScript(scriptNumber);
+  maestro.restartScript(emotion.scriptNumber);
 }
 
 // Helper function to generate emotion button HTML
-void createEmotionButton(WiFiClient &client, String emotion, String label) {
-  client.println("<p><a href=\"/maestro/" + emotion + "\"><button class=\"button\">" + label + "</button></a></p>");
+void createEmotionButton(WiFiClient &client, const Emotion &emotion) {
+  client.print("<p><a href=\"/maestro/");
+  client.print(emotion.path);
+  client.print("\"><button class=\"button\">");
+  client.print(emotion.label);
+  client.println("</button></a></p>");
 }
 
 void loop(){
@@ -128,17 +145,14 @@ void loop(){
             client.println();
             
             // Handle emotion requests
-            if (header.indexOf("GET /maestro/sleep") >= 0) {
-              setEmotion("sleep", CRGB::Black, 0);
-            } else if (header.indexOf("GET /maestro/wake") >= 0) {
-              setEmotion("wake", CRGB::White, 1);
-            } else if (header.indexOf("GET /maestro/happy") >= 0) {
-              setEmotion("happy", CRGB::Green, 2);
-            } else if (header.indexOf("GET /maestro/curious") >= 0) {
-              setEmotion("curious", CRGB::Yellow, 3);
-            } else if (header.indexOf("GET /maestro/angry") >= 0) {
-              setEmotion("angry", CRGB::Red, 4);
-          }
+            for (int i = 0; i < numEmotions; i++) {
+              String path = "/maestro/";
+              path += emotions[i].path;
+              if (header.indexOf("GET " + path) >= 0) {
+                setEmotion(emotions[i]);
+                break;
+              }
+            }
             
             
             // Display the HTML web page
@@ -149,19 +163,21 @@ void loop(){
             // Feel free to change the background-color and font-size attributes to fit your preferences
             client.println("<style>");
             client.println("html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}");
-            client.println(".button { background-color: " + droidcolor +"; border: none; color: white; padding: 16px 40px;");
+            client.print(".button { background-color: ");
+            client.print(droidcolor);
+            client.println("; border: none; color: white; padding: 16px 40px;");
             client.println("text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer;}");
             client.println("</style></head>");
             
             // Web Page Heading
-            client.println("<body><h1>" + droidname + " Control System</h1>");
+            client.print("<body><h1>");
+            client.print(droidname);
+            client.println(" Control System</h1>");
 
             // emote buttons
-            createEmotionButton(client, "sleep", "go to sleep");
-            createEmotionButton(client, "wake", "wake up");
-            createEmotionButton(client, "happy", "happy");
-            createEmotionButton(client, "curious", "curious");
-            createEmotionButton(client, "angry", "angry");
+            for (int i = 0; i < numEmotions; i++) {
+              createEmotionButton(client, emotions[i]);
+            }
 
             client.println("</body></html>");
             
