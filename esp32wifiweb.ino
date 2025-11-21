@@ -76,20 +76,15 @@ struct Emote {
 };
 
 // Define all emotes in one place
+// Ordered to match Maestro script programming (0-5)
 const Emote emotes[] = {
   // path          label           colorName  LED1&2 color   LED3 color      preserve12  script# mp3#
-  {"sleep",        "go to sleep",  "Off",     CRGB::Black,   CRGB::Black,    false,      0,      -1},
-  {"wake",         "wake up",      "White",   CRGB::White,   CRGB::Black,    false,      1,      -1},
+  {"angry",        "angry",        "Red",     CRGB::Red,     CRGB::Black,    false,      0,      -1},
+  {"curious",      "curious",      "Yellow",  CRGB::Yellow,  CRGB::Black,    false,      1,      -1},
   {"happy",        "happy",        "Green",   CRGB::Green,   CRGB::Black,    false,      2,      -1},
-  {"curious",      "curious",      "Yellow",  CRGB::Yellow,  CRGB::Black,    false,      3,      -1},
-  {"angry",        "angry",        "Red",     CRGB::Red,     CRGB::Black,    false,      4,      -1},
-  {"sad",          "sad",          "Blue",    CRGB::Blue,    CRGB::Black,    false,      5,      -1},
-  {"idle",         "idle",         "White",   CRGB::White,   CRGB::Black,    false,      6,      -1},
-  {"lookleft",     "look left",    "White",   CRGB::White,   CRGB::Black,    true,       7,      -1},
-  {"lookright",    "look right",   "White",   CRGB::White,   CRGB::Black,    true,       8,      -1},
-  {"lookup",       "look up",      "White",   CRGB::White,   CRGB::Black,    true,       9,      -1},
-  {"lookdown",     "look down",    "White",   CRGB::White,   CRGB::Black,    true,      10,      -1},
-  {"scared",       "scared",       "Purple",  CRGB::Purple,  CRGB::Black,    false,     11,      -1},
+  {"sad",          "sad",          "Blue",    CRGB::Blue,    CRGB::Black,    false,      3,      -1},
+  {"sleep",        "go to sleep",  "Off",     CRGB::Black,   CRGB::Black,    false,      4,      -1},
+  {"wake",         "wake up",      "White",   CRGB::White,   CRGB::Black,    false,      5,      -1},
   {"flashlight_on",  "flashlight on",  "Flashlight On",  CRGB::Black, CRGB::White, true, -1,     -1},
   {"flashlight_off", "flashlight off", "Flashlight Off", CRGB::Black, CRGB::Black, true, -1,     -1}
 };
@@ -104,7 +99,7 @@ String droidcolor = "green";             // Button color (CSS color name)
 // SSID will use droidname above
 // *** SECURITY: Change this password before deploying! ***
 // Password must be 8-63 characters
-const char* ap_password = "CHANGE_ME_12345";  // Change to a secure password!
+const char* ap_password = "changeme";  // Change to a secure password!
 
 // Set web server port number to 80
 WiFiServer server(80);
@@ -112,6 +107,10 @@ WiFiServer server(80);
 // Variable to store the HTTP request
 String header;
 #define MAX_HEADER_SIZE 512  // Limit header size to prevent memory issues
+
+// Status tracking for web display
+String lastEmote = "None";
+String systemStatus = "Initializing...";
 
 // Current time
 unsigned long currentTime = millis();
@@ -175,11 +174,45 @@ void setup() {
   Serial.println(WiFi.softAPIP());
   Serial.println("Connect to this network and navigate to http://192.168.4.1");
   
+  // Set system status for web display
+  systemStatus = "Ready";
+  
   server.begin();
+}
+
+// Helper function to generate status HTML for web display
+String getStatusHTML() {
+  String status = "<div class=\"status-console\">";
+  status += "<h3>System Status</h3>";
+  status += "<div class=\"status-grid\">";
+  
+  // Network info
+  status += "<div class=\"status-item\"><strong>Network:</strong> " + droidname + " (192.168.4.1)</div>";
+  
+  // Component status
+  status += "<div class=\"status-item\"><strong>Maestro:</strong> ";
+  status += maestroAvailable ? "Connected" : "Disabled";
+  status += "</div>";
+  
+  status += "<div class=\"status-item\"><strong>DFPlayer:</strong> ";
+  status += dfPlayerAvailable ? "Connected" : "Not Available";
+  status += "</div>";
+  
+  // System status
+  status += "<div class=\"status-item\"><strong>Status:</strong> " + systemStatus + "</div>";
+  
+  // Last emote
+  status += "<div class=\"status-item\"><strong>Last Emote:</strong> " + lastEmote + "</div>";
+  
+  status += "</div></div>";
+  return status;
 }
 
 // Helper function to set emote state
 void setEmote(const Emote &emote) {
+  // Track last emote for status display
+  lastEmote = String(emote.label);
+  
   #if DEBUG_MODE
     Serial.print("Setting emote: ");
     Serial.println(emote.path);
@@ -295,6 +328,14 @@ void loop(){
               "transition: all 0.3s; display: block; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }"
               ".button:hover { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(0,0,0,0.4); opacity: 0.9; }"
               ".button:active { transform: translateY(0); box-shadow: 0 2px 4px rgba(0,0,0,0.3); }"
+              ".status-console { position: fixed; bottom: 0; left: 0; right: 0; background-color: #2a2a2a; "
+              "border-top: 2px solid #444; padding: 15px 20px; box-shadow: 0 -2px 10px rgba(0,0,0,0.5); }"
+              ".status-console h3 { margin: 0 0 10px 0; font-size: 18px; color: #888; text-align: center; }"
+              ".status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; "
+              "max-width: 1200px; margin: 0 auto; font-size: 14px; }"
+              ".status-item { background-color: #1a1a1a; padding: 8px 12px; border-radius: 6px; border: 1px solid #444; }"
+              ".status-item strong { color: #aaa; margin-right: 8px; }"
+              "body { padding-bottom: 120px; }"
               "</style></head>"
               "<body><h1>"
             );
@@ -306,7 +347,12 @@ void loop(){
               createEmoteButton(client, emotes[i]);
             }
 
-            client.println("</div></body></html>");
+            client.println("</div>");
+            
+            // Add status console
+            client.print(getStatusHTML());
+            
+            client.println("</body></html>");
             
             // The HTTP response ends with another blank line
             client.println();
