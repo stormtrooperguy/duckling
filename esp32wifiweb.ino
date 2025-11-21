@@ -1,3 +1,23 @@
+/*********
+  ESP32 Droid Control System
+  
+  Originally inspired by work from Rui Santos
+  https://randomnerdtutorials.com
+  
+  Modified extensively by Cursor AI
+  Under the supervision of Brian Anderson
+  
+  Features:
+  - WiFi Access Point mode for standalone operation
+  - Web interface optimized for landscape tablets
+  - FastLED control for addressable RGB LEDs
+  - Pololu Maestro servo controller integration
+  - DFPlayer Mini MP3 module support
+  - Multiple emotes with coordinated LEDs, sounds, and servos
+  - Performance optimized HTTP handling
+  - Debug mode for development and troubleshooting
+*********/
+
 // Load Wi-Fi library
 #include <WiFi.h>
 
