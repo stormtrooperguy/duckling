@@ -1,6 +1,9 @@
 // Load Wi-Fi library
 #include <WiFi.h>
 
+// Debug Configuration
+#define DEBUG_MODE false  // Set to true to enable verbose serial debugging
+
 // Serial Port Configuration
 // Maestro Servo Controller
 #define MAESTRO_ENABLED true      // Set to false if Maestro not connected
@@ -152,12 +155,12 @@ void setup() {
 
 // Helper function to set emote state
 void setEmote(const Emote &emote) {
-  Serial.print("Setting emote: ");
-  Serial.println(emote.path);
-  
-  // Set LED colors
-  Serial.print("Eyes ");
-  Serial.println(emote.colorName);
+  #if DEBUG_MODE
+    Serial.print("Setting emote: ");
+    Serial.println(emote.path);
+    Serial.print("Eyes ");
+    Serial.println(emote.colorName);
+  #endif
   
   // Only update LEDs 1 & 2 if not preserving their state
   if (!emote.preserveLED12) {
@@ -172,10 +175,13 @@ void setEmote(const Emote &emote) {
   // Play MP3 track if specified (mp3Track >= 0) and DFPlayer is available
   if (emote.mp3Track >= 0) {
     if (dfPlayerAvailable) {
-      Serial.print("Playing MP3 track ");
-      Serial.println(emote.mp3Track);
+      #if DEBUG_MODE
+        Serial.print("Playing MP3 track ");
+        Serial.println(emote.mp3Track);
+      #endif
       dfPlayer.play(emote.mp3Track);
     } else {
+      // Always show errors/warnings
       Serial.println("MP3 requested but DFPlayer not available");
     }
   }
@@ -183,10 +189,13 @@ void setEmote(const Emote &emote) {
   // Only trigger maestro script if specified (scriptNumber >= 0) and Maestro is available
   if (emote.scriptNumber >= 0) {
     if (maestroAvailable) {
-      Serial.print("Activating maestro sequence ");
-      Serial.println(emote.scriptNumber);
+      #if DEBUG_MODE
+        Serial.print("Activating maestro sequence ");
+        Serial.println(emote.scriptNumber);
+      #endif
       maestro.restartScript(emote.scriptNumber);
     } else {
+      // Always show errors/warnings
       Serial.println("Maestro script requested but Maestro not available");
     }
   }
@@ -206,7 +215,9 @@ void loop(){
     client.setNoDelay(true);                // Disable Nagle's algorithm for faster response
     currentTime = millis();
     previousTime = currentTime;
-    Serial.println("New Client.");          // print a message out in the serial port
+    #if DEBUG_MODE
+      Serial.println("New Client.");
+    #endif
     header.reserve(MAX_HEADER_SIZE);        // Pre-allocate memory to avoid reallocation
     String currentLine = "";                // make a String to hold incoming data from the client
     while (client.connected() && currentTime - previousTime <= timeoutTime) {  // loop while the client's connected
@@ -290,7 +301,9 @@ void loop(){
     client.flush();
     // Close the connection
     client.stop();
-    Serial.println("Client disconnected.");
-    Serial.println("");
+    #if DEBUG_MODE
+      Serial.println("Client disconnected.");
+      Serial.println("");
+    #endif
   }
 }
