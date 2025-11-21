@@ -1,0 +1,254 @@
+ESP32 DROID CONTROL SYSTEM - WIRING DIAGRAM
+============================================
+
+COMPLETE SYSTEM OVERVIEW
+=========================
+
+                                    5V POWER SUPPLY
+                                         │
+                    ┌────────────────────┼────────────────────┐
+                    │                    │                    │
+                    │                    │                    │
+                 ┌──┴───┐            ┌──┴──┐             ┌───┴────┐
+                 │ LED  │            │ DF  │             │MAESTRO │
+                 │STRIP │            │PLAYER│            │ SERVO  │
+                 └──┬───┘            └──┬──┘             │ CTRL   │
+                    │                   │                └───┬────┘
+                    │                   │                    │
+              ┌─────┼───────────────────┼────────────────────┼─────┐
+              │     │                   │                    │     │
+              │  ┌──┴────────┬──────────┴────────┬───────────┴──┐  │
+              │  │  GPIO 5   │   GPIO 9  GPIO 10 │ GPIO 16  17 │  │
+              │  │  (LED)    │   (RX)     (TX)   │ (RX)    (TX)│  │
+              │  │           │  DFPlayer Serial2 │ Maestro Ser1│  │
+              │  │           │                   │             │  │
+              │  │       ESP32 DEVELOPMENT BOARD               │  │
+              │  │                                             │  │
+              │  │           GND              GND          GND │  │
+              │  └─────────────┬───────────────┬──────────────┬──┘  │
+              │                │               │              │     │
+              └────────────────┼───────────────┼──────────────┼─────┘
+                               │               │              │
+                            COMMON GROUND RAIL
+
+
+DETAILED COMPONENT CONNECTIONS
+================================
+
+1. LED STRIP (WS2812B - 3 LEDs)
+   ===============================
+   
+   ┌──────────────┐
+   │  LED STRIP   │
+   │  (3x LEDs)   │
+   └──┬───┬───┬───┘
+      │   │   │
+   DIN│ 5V│ GND
+      │   │   │
+      │   │   │        ┌─────────────────┐
+      │   │   └────────┤ GND             │
+      │   └────────────┤ 5V (or 3.3V)    │
+      └────────────────┤ GPIO 5 (DATA)   │  ESP32
+                       └─────────────────┘
+
+   Notes:
+   - WS2812B can run on 3.3V or 5V
+   - Add 470Ω resistor on data line if using 5V LEDs with 3.3V logic
+   - Add 1000µF capacitor across 5V/GND for power stability
+
+
+2. MAESTRO SERVO CONTROLLER (Optional - Serial1)
+   ================================================
+   
+   ┌────────────────────┐
+   │  POLOLU MAESTRO    │
+   │  MINI MAESTRO      │
+   │                    │
+   │  [Servo Channels]  │
+   └─┬────┬───┬─────────┘
+     │    │   │
+    RX   TX  GND
+     │    │   │
+     │    │   │          ┌─────────────────┐
+     │    │   └──────────┤ GND             │
+     │    └──────────────┤ GPIO 16 (RX1)   │  ESP32
+     └───────────────────┤ GPIO 17 (TX1)   │  Serial1
+                         └─────────────────┘
+
+   Notes:
+   - Maestro must be powered separately (5-6V for servos)
+   - Connect servo power supply to Maestro, NOT ESP32
+   - Common ground between ESP32 and Maestro required
+   - TX from ESP32 → RX on Maestro
+   - RX from ESP32 ← TX from Maestro
+   - Baud rate: 9600
+
+
+3. DFPLAYER MINI MP3 MODULE (Optional - Serial2)
+   ================================================
+   
+   ┌────────────────────┐
+   │   DFPLAYER MINI    │
+   │                    │
+   │   [SD CARD SLOT]   │
+   │                    │
+   └─┬──┬──┬────┬───┬───┘
+     │  │  │    │   │
+    RX TX GND  VCC SPK+ SPK-
+     │  │  │    │   │   │
+     │  │  │    │   │   └────┐
+     │  │  │    │   └───┐    │    ┌──────────┐
+     │  │  │    │       └────┼────┤ SPEAKER  │
+     │  │  │    │            └────┤  (8Ω)    │
+     │  │  │    │                 └──────────┘
+     │  │  │    │
+   ┌─┴──┴──┴────┴────┐
+   │ 1kΩ             │
+   ├──┐              │
+   │  │              │        ┌─────────────────┐
+   │  │              └────────┤ 5V              │
+   │  │                       │                 │
+   │  │        ┌──────────────┤ GND             │  ESP32
+   │  └────────┤              │                 │  Serial2
+   │           │   ┌──────────┤ GPIO 9 (RX2)    │
+   └───────────┼───┤          │                 │
+               │   └──────────┤ GPIO 10 (TX2)   │
+               │              └─────────────────┘
+            IMPORTANT!
+      1kΩ resistor between
+      ESP32 TX and DFPlayer RX
+
+   Notes:
+   - DFPlayer requires 3.2V-5V power (use 5V from ESP32)
+   - 1kΩ resistor REQUIRED on RX line (level shifting protection)
+   - No resistor needed on TX line
+   - SD card must be FAT32 formatted
+   - Speaker: 8Ω recommended (3-5W)
+   - Baud rate: 9600
+
+
+PIN ASSIGNMENT TABLE
+====================
+
+ESP32 GPIO    | Component         | Signal      | Notes
+--------------|-------------------|-------------|---------------------------
+GPIO 5        | LED Strip         | Data In     | WS2812B data line
+GPIO 9        | DFPlayer Mini     | RX (ESP)    | Serial2 - from DFPlayer TX
+GPIO 10       | DFPlayer Mini     | TX (ESP)    | Serial2 - to DFPlayer RX (via 1kΩ)
+GPIO 16       | Maestro           | RX (ESP)    | Serial1 - from Maestro TX
+GPIO 17       | Maestro           | TX (ESP)    | Serial1 - to Maestro RX
+GND           | All Components    | Ground      | Common ground required
+5V            | LED Strip, DFP    | Power       | From USB or external supply
+-             | Maestro           | Power       | Separate 5-6V supply for servos
+
+
+POWER DISTRIBUTION
+==================
+
+              EXTERNAL 5V SUPPLY (Recommended for production)
+                        │
+         ┌──────────────┼──────────────┐
+         │              │              │
+         │              │              │
+    ┌────┴─────┐   ┌────┴─────┐  ┌────┴──────┐
+    │  ESP32   │   │   LED    │  │ DFPlayer  │
+    │  Board   │   │  Strip   │  │   Mini    │
+    └──────────┘   └──────────┘  └───────────┘
+
+    SEPARATE SUPPLY (REQUIRED)
+         │
+    ┌────┴─────┐
+    │ MAESTRO  │
+    │  Servo   │  (5-6V depending on servos)
+    │  Board   │
+    └──────────┘
+
+    All grounds must be connected together!
+
+
+MINIMAL WIRING (LED-ONLY CONFIGURATION)
+========================================
+
+If you want to test with LEDs only (no Maestro, no DFPlayer):
+
+1. Set in code: #define MAESTRO_ENABLED false
+2. Don't connect DFPlayer (will auto-detect absence)
+
+Simple wiring:
+                         ┌─────────────┐
+        LED Strip DIN────┤ GPIO 5      │
+        LED Strip 5V ────┤ 5V          │  ESP32
+        LED Strip GND────┤ GND         │
+                         └─────────────┘
+
+
+STEP-BY-STEP WIRING CHECKLIST
+==============================
+
+□ Step 1: Connect all ground connections first
+  - ESP32 GND to common ground rail
+  - LED Strip GND to ground rail
+  - DFPlayer GND to ground rail (if using)
+  - Maestro GND to ground rail (if using)
+
+□ Step 2: Connect power
+  - LED Strip VCC to 5V
+  - DFPlayer VCC to 5V (if using)
+  - Maestro to separate 5-6V supply (if using)
+
+□ Step 3: Connect LED data
+  - LED Strip DIN to ESP32 GPIO 5
+
+□ Step 4: Connect DFPlayer (if using)
+  - ESP32 GPIO 10 → 1kΩ resistor → DFPlayer RX
+  - ESP32 GPIO 9 → DFPlayer TX (direct)
+  - DFPlayer SPK+ and SPK- to speaker
+
+□ Step 5: Connect Maestro (if using)
+  - ESP32 GPIO 17 → Maestro RX
+  - ESP32 GPIO 16 → Maestro TX
+
+□ Step 6: Double-check all connections
+  - Verify no short circuits
+  - Confirm polarity on power connections
+  - Ensure 1kΩ resistor on DFPlayer RX
+
+□ Step 7: Test
+  - Upload code
+  - Open Serial Monitor (115200 baud)
+  - Verify initialization messages
+
+
+COMMON MISTAKES TO AVOID
+=========================
+
+❌ Forgetting 1kΩ resistor on DFPlayer RX line
+❌ Swapping TX/RX connections (TX → RX, RX → TX)
+❌ Not connecting common ground
+❌ Powering servos from ESP32 (will brownout)
+❌ Using same power supply for ESP32 and high-current servos
+❌ Wrong baud rate settings
+❌ SD card not FAT32 formatted
+
+
+TROUBLESHOOTING BY LED BEHAVIOR
+================================
+
+LEDs don't light:
+- Check GPIO 5 connection
+- Verify LED strip has power
+- Check LED_PIN setting in code
+- Try different COLOR_ORDER setting
+
+LEDs wrong colors:
+- Try COLOR_ORDER: RGB, GRB, or BRG
+- Check voltage (WS2812B works at 3.3V or 5V)
+
+LEDs flicker:
+- Add capacitor (1000µF) across power lines
+- Check power supply capacity
+- Add resistor (470Ω) on data line
+
+
+For more information, see README.md
+

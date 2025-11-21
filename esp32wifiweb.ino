@@ -1,9 +1,31 @@
 // Load Wi-Fi library
 #include <WiFi.h>
 
+// Serial Port Configuration
+// Maestro Servo Controller
+#define MAESTRO_ENABLED true      // Set to false if Maestro not connected
+#define MAESTRO_SERIAL_NUM 1      // Use Serial1
+#define MAESTRO_RX_PIN 16         // ESP32 RX (connects to Maestro TX)
+#define MAESTRO_TX_PIN 17         // ESP32 TX (connects to Maestro RX)
+#define MAESTRO_BAUD 9600
+
+// DFPlayer Mini MP3 Module
+#define DFPLAYER_SERIAL_NUM 2     // Use Serial2
+#define DFPLAYER_RX_PIN 9         // ESP32 RX (connects to DFPlayer TX)
+#define DFPLAYER_TX_PIN 10        // ESP32 TX (connects to DFPlayer RX)
+#define DFPLAYER_BAUD 9600
+
 // Maestro library
 #include <PololuMaestro.h>
-MiniMaestro maestro(Serial1);
+HardwareSerial maestroSerial(MAESTRO_SERIAL_NUM);
+MiniMaestro maestro(maestroSerial);
+bool maestroAvailable = MAESTRO_ENABLED;  // Track if Maestro is available
+
+// DFPlayer Mini library
+#include <DFRobotDFPlayerMini.h>
+HardwareSerial dfPlayerSerial(DFPLAYER_SERIAL_NUM);
+DFRobotDFPlayerMini dfPlayer;
+bool dfPlayerAvailable = false;     // Track if DFPlayer initialized successfully
 
 // FastLED library
 #include <FastLED.h>
@@ -24,25 +46,26 @@ struct Emote {
   CRGB led3Color;          // LED 3 color (separate control)
   bool preserveLED12;      // If true, don't change LEDs 1 & 2
   int scriptNumber;        // Maestro script number (-1 = no script)
+  int mp3Track;            // DFPlayer track number (-1 = no sound)
 };
 
 // Define all emotes in one place
 const Emote emotes[] = {
-  // path          label           colorName  LED1&2 color   LED3 color      preserve12  script#
-  {"sleep",        "go to sleep",  "Off",     CRGB::Black,   CRGB::Black,    false,      0},
-  {"wake",         "wake up",      "White",   CRGB::White,   CRGB::Black,    false,      1},
-  {"happy",        "happy",        "Green",   CRGB::Green,   CRGB::Black,    false,      2},
-  {"curious",      "curious",      "Yellow",  CRGB::Yellow,  CRGB::Black,    false,      3},
-  {"angry",        "angry",        "Red",     CRGB::Red,     CRGB::Black,    false,      4},
-  {"sad",          "sad",          "Blue",    CRGB::Blue,    CRGB::Black,    false,      5},
-  {"idle",         "idle",         "White",   CRGB::White,   CRGB::Black,    false,      6},
-  {"lookleft",     "look left",    "White",   CRGB::White,   CRGB::Black,    true,       7},
-  {"lookright",    "look right",   "White",   CRGB::White,   CRGB::Black,    true,       8},
-  {"lookup",       "look up",      "White",   CRGB::White,   CRGB::Black,    true,       9},
-  {"lookdown",     "look down",    "White",   CRGB::White,   CRGB::Black,    true,      10},
-  {"scared",       "scared",       "Purple",  CRGB::Purple,  CRGB::Black,    false,     11},
-  {"flashlight_on",  "flashlight on",  "Flashlight On",  CRGB::Black, CRGB::White, true, -1},
-  {"flashlight_off", "flashlight off", "Flashlight Off", CRGB::Black, CRGB::Black, true, -1}
+  // path          label           colorName  LED1&2 color   LED3 color      preserve12  script# mp3#
+  {"sleep",        "go to sleep",  "Off",     CRGB::Black,   CRGB::Black,    false,      0,      -1},
+  {"wake",         "wake up",      "White",   CRGB::White,   CRGB::Black,    false,      1,      -1},
+  {"happy",        "happy",        "Green",   CRGB::Green,   CRGB::Black,    false,      2,      -1},
+  {"curious",      "curious",      "Yellow",  CRGB::Yellow,  CRGB::Black,    false,      3,      -1},
+  {"angry",        "angry",        "Red",     CRGB::Red,     CRGB::Black,    false,      4,      -1},
+  {"sad",          "sad",          "Blue",    CRGB::Blue,    CRGB::Black,    false,      5,      -1},
+  {"idle",         "idle",         "White",   CRGB::White,   CRGB::Black,    false,      6,      -1},
+  {"lookleft",     "look left",    "White",   CRGB::White,   CRGB::Black,    true,       7,      -1},
+  {"lookright",    "look right",   "White",   CRGB::White,   CRGB::Black,    true,       8,      -1},
+  {"lookup",       "look up",      "White",   CRGB::White,   CRGB::Black,    true,       9,      -1},
+  {"lookdown",     "look down",    "White",   CRGB::White,   CRGB::Black,    true,      10,      -1},
+  {"scared",       "scared",       "Purple",  CRGB::Purple,  CRGB::Black,    false,     11,      -1},
+  {"flashlight_on",  "flashlight on",  "Flashlight On",  CRGB::Black, CRGB::White, true, -1,     -1},
+  {"flashlight_off", "flashlight off", "Flashlight Off", CRGB::Black, CRGB::Black, true, -1,     -1}
 };
 const int numEmotes = sizeof(emotes) / sizeof(emotes[0]);
 
@@ -70,7 +93,27 @@ const long timeoutTime = 2000;
 
 void setup() {
   Serial.begin(115200);
-  Serial1.begin(9600);
+  
+  // Initialize Maestro Serial Connection
+  if (maestroAvailable) {
+    maestroSerial.begin(MAESTRO_BAUD, SERIAL_8N1, MAESTRO_RX_PIN, MAESTRO_TX_PIN);
+    Serial.println("Maestro serial initialized");
+  } else {
+    Serial.println("Maestro disabled in configuration");
+  }
+
+  // Initialize DFPlayer Serial Connection
+  dfPlayerSerial.begin(DFPLAYER_BAUD, SERIAL_8N1, DFPLAYER_RX_PIN, DFPLAYER_TX_PIN);
+  Serial.println("Initializing DFPlayer...");
+  if (!dfPlayer.begin(dfPlayerSerial)) {
+    Serial.println("DFPlayer initialization failed!");
+    Serial.println("Check connections and SD card");
+    dfPlayerAvailable = false;
+  } else {
+    Serial.println("DFPlayer initialized successfully");
+    dfPlayer.volume(20);  // Set volume (0-30)
+    dfPlayerAvailable = true;
+  }
 
   // Initialize FastLED
   FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS);
@@ -125,11 +168,26 @@ void setEmote(const Emote &emote) {
   leds[2] = emote.led3Color;
   FastLED.show();
   
-  // Only trigger maestro script if specified (scriptNumber >= 0)
+  // Play MP3 track if specified (mp3Track >= 0) and DFPlayer is available
+  if (emote.mp3Track >= 0) {
+    if (dfPlayerAvailable) {
+      Serial.print("Playing MP3 track ");
+      Serial.println(emote.mp3Track);
+      dfPlayer.play(emote.mp3Track);
+    } else {
+      Serial.println("MP3 requested but DFPlayer not available");
+    }
+  }
+  
+  // Only trigger maestro script if specified (scriptNumber >= 0) and Maestro is available
   if (emote.scriptNumber >= 0) {
-    Serial.print("Activating maestro sequence ");
-    Serial.println(emote.scriptNumber);
-    maestro.restartScript(emote.scriptNumber);
+    if (maestroAvailable) {
+      Serial.print("Activating maestro sequence ");
+      Serial.println(emote.scriptNumber);
+      maestro.restartScript(emote.scriptNumber);
+    } else {
+      Serial.println("Maestro script requested but Maestro not available");
+    }
   }
 }
 
