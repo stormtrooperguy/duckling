@@ -63,8 +63,8 @@ bool dfPlayerAvailable = false;     // Track if DFPlayer initialized successfull
 #define COLOR_ORDER GRB
 CRGB leds[NUM_LEDS];
 
-// Emote definition structure
-struct Emote {
+// Button definition structure (used for both Emotes and Actions)
+struct Button {
   const char* path;        // URL path (e.g., "sleep")
   const char* label;       // Button label (e.g., "go to sleep")
   const char* colorName;   // Color name for serial output
@@ -75,20 +75,26 @@ struct Emote {
   int mp3Track;            // DFPlayer track number (-1 = no sound)
 };
 
-// Define all emotes in one place
+// EMOTES: Change eye colors and trigger servo sequences
 // Ordered to match Maestro script programming (0-5)
-const Emote emotes[] = {
+const Button emotes[] = {
   // path          label           colorName  LED1&2 color   LED3 color      preserve12  script# mp3#
   {"angry",        "angry",        "Red",     CRGB::Red,     CRGB::Black,    false,      0,      -1},
   {"curious",      "curious",      "Yellow",  CRGB::Yellow,  CRGB::Black,    false,      1,      -1},
   {"happy",        "happy",        "Green",   CRGB::Green,   CRGB::Black,    false,      2,      -1},
   {"sad",          "sad",          "Blue",    CRGB::Blue,    CRGB::Black,    false,      3,      -1},
   {"sleep",        "go to sleep",  "Off",     CRGB::Black,   CRGB::Black,    false,      4,      -1},
-  {"wake",         "wake up",      "White",   CRGB::White,   CRGB::Black,    false,      5,      -1},
+  {"wake",         "wake up",      "White",   CRGB::White,   CRGB::Black,    false,      5,      -1}
+};
+const int numEmotes = sizeof(emotes) / sizeof(emotes[0]);
+
+// ACTIONS: Utility functions that don't change eye colors
+const Button actions[] = {
+  // path          label           colorName  LED1&2 color   LED3 color      preserve12  script# mp3#
   {"flashlight_on",  "flashlight on",  "Flashlight On",  CRGB::Black, CRGB::White, true, -1,     -1},
   {"flashlight_off", "flashlight off", "Flashlight Off", CRGB::Black, CRGB::Black, true, -1,     -1}
 };
-const int numEmotes = sizeof(emotes) / sizeof(emotes[0]);
+const int numActions = sizeof(actions) / sizeof(actions[0]);
 
 // *** IMPORTANT: Customize these values for your installation ***
 // Replace these strings to customize for your droid
@@ -208,36 +214,36 @@ String getStatusHTML() {
   return status;
 }
 
-// Helper function to set emote state
-void setEmote(const Emote &emote) {
-  // Track last emote for status display
-  lastEmote = String(emote.label);
+// Helper function to trigger button action (emote or action)
+void triggerButton(const Button &button) {
+  // Track last action for status display
+  lastEmote = String(button.label);
   
   #if DEBUG_MODE
-    Serial.print("Setting emote: ");
-    Serial.println(emote.path);
+    Serial.print("Triggering: ");
+    Serial.println(button.path);
     Serial.print("Eyes ");
-    Serial.println(emote.colorName);
+    Serial.println(button.colorName);
   #endif
   
   // Only update LEDs 1 & 2 if not preserving their state
-  if (!emote.preserveLED12) {
-    leds[0] = emote.color;  // LED 1
-    leds[1] = emote.color;  // LED 2
+  if (!button.preserveLED12) {
+    leds[0] = button.color;  // LED 1
+    leds[1] = button.color;  // LED 2
   }
   
   // Always update LED 3
-  leds[2] = emote.led3Color;
+  leds[2] = button.led3Color;
   FastLED.show();
   
   // Play MP3 track if specified (mp3Track >= 0) and DFPlayer is available
-  if (emote.mp3Track >= 0) {
+  if (button.mp3Track >= 0) {
     if (dfPlayerAvailable) {
       #if DEBUG_MODE
         Serial.print("Playing MP3 track ");
-        Serial.println(emote.mp3Track);
+        Serial.println(button.mp3Track);
       #endif
-      dfPlayer.play(emote.mp3Track);
+      dfPlayer.play(button.mp3Track);
     } else {
       // Always show errors/warnings
       Serial.println("MP3 requested but DFPlayer not available");
@@ -245,13 +251,13 @@ void setEmote(const Emote &emote) {
   }
   
   // Only trigger maestro script if specified (scriptNumber >= 0) and Maestro is available
-  if (emote.scriptNumber >= 0) {
+  if (button.scriptNumber >= 0) {
     if (maestroAvailable) {
       #if DEBUG_MODE
         Serial.print("Activating maestro sequence ");
-        Serial.println(emote.scriptNumber);
+        Serial.println(button.scriptNumber);
       #endif
-      maestro.restartScript(emote.scriptNumber);
+      maestro.restartScript(button.scriptNumber);
     } else {
       // Always show errors/warnings
       Serial.println("Maestro script requested but Maestro not available");
@@ -260,10 +266,10 @@ void setEmote(const Emote &emote) {
 }
 
 // Helper function to generate emote button HTML (optimized)
-void createEmoteButton(WiFiClient &client, const Emote &emote) {
+void createButton(WiFiClient &client, const Button &button) {
   // Combine multiple small writes into one for better performance
-  String button = String("<a href=\"/maestro/") + emote.path + "\" class=\"button\">" + emote.label + "</a>";
-  client.println(button);
+  String btn = String("<a href=\"/maestro/") + button.path + "\" class=\"button\">" + button.label + "</a>";
+  client.println(btn);
 }
 
 void loop(){
@@ -297,12 +303,20 @@ void loop(){
             client.println("Connection: close");
             client.println();
             
-            // Handle emote requests (optimized - check path directly)
+            // Handle emote requests
             for (int i = 0; i < numEmotes; i++) {
-              // Build path string once and check
               String searchPath = String("GET /maestro/") + emotes[i].path;
               if (header.indexOf(searchPath) >= 0) {
-                setEmote(emotes[i]);
+                triggerButton(emotes[i]);
+                break;
+              }
+            }
+            
+            // Handle action requests
+            for (int i = 0; i < numActions; i++) {
+              String searchPath = String("GET /maestro/") + actions[i].path;
+              if (header.indexOf(searchPath) >= 0) {
+                triggerButton(actions[i]);
                 break;
               }
             }
@@ -318,7 +332,8 @@ void loop(){
               "html { font-family: Helvetica, Arial, sans-serif; }"
               "body { background-color: #1a1a1a; color: #ffffff; padding: 20px; }"
               "h1 { text-align: center; margin-bottom: 30px; font-size: 48px; }"
-              ".button-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; max-width: 1200px; margin: 0 auto; }"
+              "h2 { text-align: center; margin: 30px 0 15px 0; font-size: 32px; color: #aaa; }"
+              ".button-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; max-width: 1200px; margin: 0 auto 30px auto; }"
               ".button { background-color: "
             );
             client.print(droidcolor);
@@ -337,16 +352,23 @@ void loop(){
               ".status-item strong { color: #aaa; margin-right: 8px; }"
               "body { padding-bottom: 120px; }"
               "</style></head>"
-              "<body><h1>"
+              "<body><h1>BDX Control System ("
             );
             client.print(droidname);
-            client.print(" Control System</h1><div class=\"button-grid\">");
-
-            // emote buttons
+            client.print(")</h1>");
+            
+            // Emotes section
+            client.println("<h2>Emotes</h2><div class=\"button-grid\">");
             for (int i = 0; i < numEmotes; i++) {
-              createEmoteButton(client, emotes[i]);
+              createButton(client, emotes[i]);
             }
-
+            client.println("</div>");
+            
+            // Actions section
+            client.println("<h2>Actions</h2><div class=\"button-grid\">");
+            for (int i = 0; i < numActions; i++) {
+              createButton(client, actions[i]);
+            }
             client.println("</div>");
             
             // Add status console

@@ -10,8 +10,8 @@ A web-based control system for animatronic droids using ESP32, featuring LED eye
 - **Servo Control**: Optional integration with Pololu Maestro for complex servo sequences
 - **Sound Effects**: Optional DFPlayer Mini for MP3 audio playback
 - **Modular Design**: Run with any combination of components (LEDs only, LEDs + Servos, full system)
-- **Multiple Emotes**: Pre-configured emotional states and directional movements
-- **Flashlight Mode**: Independent LED 3 control for utility lighting
+- **Emotes System**: Pre-configured emotional states with coordinated eye colors and servo movements
+- **Actions System**: Utility functions (like flashlight) that preserve eye state
 - **Performance Optimized**: Fast HTTP response (~200-400ms) with optional debug mode for development
 
 ## Hardware Requirements
@@ -219,39 +219,47 @@ FastLED.setBrightness(50);  // Default: 50
 
 ### Available Emotes
 
+Emotes change eye colors and trigger servo sequences:
+
 | Emote | Eye Color | Maestro Script | Description |
 |-------|-----------|----------------|-------------|
-| **go to sleep** | Off | 0 | All LEDs off |
-| **wake up** | White | 1 | Eyes turn white |
+| **angry** | Red | 0 | Angry expression |
+| **curious** | Yellow | 1 | Curious expression |
 | **happy** | Green | 2 | Happy expression |
-| **curious** | Yellow | 3 | Curious expression |
-| **angry** | Red | 4 | Angry expression |
-| **sad** | Blue | 5 | Sad expression |
-| **idle** | White | 6 | Idle animation |
-| **scared** | Purple | 11 | Scared expression |
-| **look left** | Preserved | 7 | Look left (preserves eye color) |
-| **look right** | Preserved | 8 | Look right (preserves eye color) |
-| **look up** | Preserved | 9 | Look up (preserves eye color) |
-| **look down** | Preserved | 10 | Look down (preserves eye color) |
-| **flashlight on** | Preserved | None | LED 3 white (utility light) |
-| **flashlight off** | Preserved | None | LED 3 off |
+| **sad** | Blue | 3 | Sad expression |
+| **go to sleep** | Off | 4 | All LEDs off |
+| **wake up** | White | 5 | Eyes turn white |
 
-**Note**: "Preserved" means the emote maintains the current eye color while executing movement.
+### Available Actions
 
-## Adding New Emotes
+Actions provide utility functions without changing eye colors:
 
-### Step 1: Add to Emote Array
+| Action | Eye Color | LED 3 | Description |
+|--------|-----------|-------|-------------|
+| **flashlight on** | Preserved | White | Turn on LED 3 as flashlight |
+| **flashlight off** | Preserved | Off | Turn off LED 3 flashlight |
 
-Add a new line to the `emotes[]` array:
+**Note**: "Preserved" means the action maintains the current eye color (LEDs 1 & 2) while only affecting LED 3.
+
+## Adding New Emotes or Actions
+
+### Emotes vs Actions
+
+- **Emotes**: Change eye colors (LEDs 1 & 2) and typically trigger servo sequences
+- **Actions**: Utility functions that preserve eye color and usually only affect LED 3
+
+### Step 1: Add to Appropriate Array
+
+For a new emote (changes eye color), add to `emotes[]`:
 
 ```cpp
-const Emote emotes[] = {
+const Button emotes[] = {
   // ... existing emotes ...
   {"newemote", "New Emote", "Orange", CRGB::Orange, CRGB::Black, false, 12, 5},
   //    |           |           |          |            |         |      |   |
   //    |           |           |          |            |         |      |   MP3 track (or -1)
   //    |           |           |          |            |         |      Maestro script (or -1)
-  //    |           |           |          |            |         Preserve LED 1&2? (true/false)
+  //    |           |           |          |            |         Preserve LED 1&2? (false for emotes)
   //    |           |           |          |            LED 3 color
   //    |           |           |          LED 1&2 color
   //    |           |           Color name for serial output
@@ -260,14 +268,27 @@ const Emote emotes[] = {
 };
 ```
 
+For a new action (preserves eye color), add to `actions[]`:
+
+```cpp
+const Button actions[] = {
+  // ... existing actions ...
+  {"myaction", "My Action", "Action", CRGB::Black, CRGB::Purple, true, -1, 7},
+  //                                                              |     |    |
+  //                                                              |     |    MP3 track
+  //                                                              |     No servo script
+  //                                                              Preserve eyes: true
+};
+```
+
 ### Step 2: Parameters Explained
 
 - **path**: URL endpoint (alphanumeric, no spaces)
 - **label**: Button text shown on web interface
 - **colorName**: Descriptive name for serial debugging
-- **color**: LED 1&2 color (use CRGB:: constants)
-- **led3Color**: LED 3 color (usually CRGB::Black for off)
-- **preserveLED12**: `true` keeps current eye color, `false` changes it
+- **color**: LED 1&2 color (ignored if preserveLED12 is true)
+- **led3Color**: LED 3 color (CRGB::Black for off, CRGB::White for flashlight)
+- **preserveLED12**: `false` for emotes (changes eyes), `true` for actions (preserves eyes)
 - **scriptNumber**: Maestro script number (0+) or `-1` for none
 - **mp3Track**: MP3 file number (1+) or `-1` for no sound
 
@@ -331,6 +352,9 @@ Each emote can trigger a Maestro script. Program your servo sequences in Maestro
 The web interface uses a responsive grid layout optimized for landscape tablets:
 
 - **Header**: Droid name and title
+- **Emotes Section**: Emotional expressions with eye color changes
+- **Actions Section**: Utility functions that preserve eye state
+- **Status Console**: Real-time feedback at bottom of screen
 - **Button Grid**: Auto-arranges buttons across available width
 - **Dark Theme**: Reduces eye strain
 - **Large Touch Targets**: Easy interaction
@@ -582,6 +606,6 @@ For issues or questions:
   - Pololu Maestro integration
   - DFPlayer Mini MP3 support
   - Landscape tablet web interface
-  - 14 pre-configured emotes
-  - Flashlight utility mode
+  - 6 pre-configured emotes (emotional expressions)
+  - 2 utility actions (flashlight control)
 
