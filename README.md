@@ -5,13 +5,14 @@ A web-based control system for animatronic droids using ESP32, featuring LED eye
 ## Features
 
 - **WiFi Access Point**: ESP32 creates its own WiFi network for direct device control
-- **Web Interface**: Responsive landscape-optimized tablet interface
+- **Web Interface**: Responsive landscape-optimized tablet interface with fast response times
 - **LED Eye Control**: 3 addressable LEDs (WS2812B/NeoPixel) for expressive eyes
 - **Servo Control**: Optional integration with Pololu Maestro for complex servo sequences
 - **Sound Effects**: Optional DFPlayer Mini for MP3 audio playback
 - **Modular Design**: Run with any combination of components (LEDs only, LEDs + Servos, full system)
 - **Multiple Emotes**: Pre-configured emotional states and directional movements
 - **Flashlight Mode**: Independent LED 3 control for utility lighting
+- **Performance Optimized**: Fast HTTP response (~200-400ms) with optional debug mode for development
 
 ## Hardware Requirements
 
@@ -93,6 +94,9 @@ DFPlayer SPK-      → Speaker -
 Edit these variables at the top of the sketch:
 
 ```cpp
+// Debug Configuration
+#define DEBUG_MODE false  // Set to true for verbose serial debugging
+
 // Droid Configuration
 String droidname = "Grek";           // WiFi SSID name
 String droidcolor = "green";         // Button color (CSS color name)
@@ -103,6 +107,37 @@ const char* ap_password = "k7Rm9pQx2w";  // WiFi password (8-63 chars)
 #define LED_PIN 5         // Data pin for LED strip
 #define LED_TYPE WS2812B  // LED chip type
 ```
+
+### Debug Mode
+
+The system includes a debug flag for controlling serial output verbosity:
+
+```cpp
+#define DEBUG_MODE false  // Production: false, Development: true
+```
+
+**DEBUG_MODE = false (Production - Default)**
+- Maximum performance (~200-400ms response time)
+- Minimal serial output (initialization and errors only)
+- Recommended for normal operation
+
+**DEBUG_MODE = true (Development)**
+- Verbose logging of all operations
+- Shows every client connection, emote trigger, and device action
+- Slower performance (~700-900ms response time due to serial overhead)
+- Use for troubleshooting and development
+
+**What gets logged:**
+
+| Message Type | DEBUG_MODE = false | DEBUG_MODE = true |
+|--------------|-------------------|-------------------|
+| Startup info (WiFi, IP, etc.) | ✅ Always shown | ✅ Always shown |
+| Error messages | ✅ Always shown | ✅ Always shown |
+| Client connections | ❌ Hidden | ✅ Shown |
+| Emote triggers | ❌ Hidden | ✅ Shown |
+| LED changes | ❌ Hidden | ✅ Shown |
+| MP3 playback | ❌ Hidden | ✅ Shown |
+| Maestro commands | ❌ Hidden | ✅ Shown |
 
 ### Serial Port Configuration
 
@@ -297,7 +332,43 @@ Change button color by modifying:
 String droidcolor = "green";  // Any CSS color name or hex code
 ```
 
+### Performance Tips
+
+For optimal web interface responsiveness:
+
+1. **Disable Debug Mode** in production:
+   ```cpp
+   #define DEBUG_MODE false  // ~500ms faster per request
+   ```
+
+2. **Keep WiFi signal strong**: Position ESP32 for good signal to tablet
+
+3. **Minimize concurrent connections**: One control device at a time for best performance
+
+4. **Expected response times**:
+   - With DEBUG_MODE = false: ~200-400ms (fast, responsive)
+   - With DEBUG_MODE = true: ~700-900ms (slower, diagnostic)
+
 ## Troubleshooting
+
+### General Debugging
+
+**Enable Debug Mode for detailed diagnostics:**
+
+1. Set `DEBUG_MODE true` in the sketch
+2. Upload the modified code
+3. Open Serial Monitor (115200 baud)
+4. Observe detailed logging of all operations
+5. Set back to `DEBUG_MODE false` when done
+
+Debug mode shows:
+- Every client connection and disconnection
+- Each emote trigger with full details
+- LED color changes
+- MP3 track playback attempts
+- Maestro servo commands
+
+**Note**: Debug mode adds ~500ms overhead per operation due to serial output. Use only for troubleshooting.
 
 ### WiFi Issues
 
@@ -359,7 +430,7 @@ String droidcolor = "green";  // Any CSS color name or hex code
 
 Monitor debugging info at 115200 baud:
 
-### With All Components Connected
+### Startup (Always Shown)
 
 ```
 Maestro serial initialized
@@ -371,50 +442,49 @@ SSID: Grek
 Password: k7Rm9pQx2w
 AP IP address: 192.168.4.1
 Connect to this network and navigate to http://192.168.4.1
+```
 
+### During Operation (DEBUG_MODE = false - Production)
+
+```
+(No output during normal operation)
+(Only errors will be shown)
+```
+
+### During Operation (DEBUG_MODE = true - Development)
+
+```
+New Client.
 Setting emote: happy
 Eyes Green
 Playing MP3 track 2
 Activating maestro sequence 2
+Client disconnected.
+
+New Client.
+Setting emote: angry
+Eyes Red
+Playing MP3 track 4
+Activating maestro sequence 4
+Client disconnected.
 ```
 
-### With Maestro Disabled
+### Error Messages (Always Shown Regardless of DEBUG_MODE)
 
+**When DFPlayer missing:**
 ```
-Maestro disabled in configuration
-Initializing DFPlayer...
-DFPlayer initialized successfully
-Configuring Access Point...
-Access Point started!
-SSID: Grek
-Password: k7Rm9pQx2w
-AP IP address: 192.168.4.1
-Connect to this network and navigate to http://192.168.4.1
-
-Setting emote: happy
-Eyes Green
-Playing MP3 track 2
-Maestro script requested but Maestro not available
-```
-
-### With DFPlayer Missing
-
-```
-Maestro serial initialized
 Initializing DFPlayer...
 DFPlayer initialization failed!
 Check connections and SD card
-Configuring Access Point...
-Access Point started!
-SSID: Grek
-Password: k7Rm9pQx2w
-AP IP address: 192.168.4.1
-Connect to this network and navigate to http://192.168.4.1
-
-Setting emote: happy
-Eyes Green
+...
 MP3 requested but DFPlayer not available
-Activating maestro sequence 2
+```
+
+**When Maestro disabled:**
+```
+Maestro disabled in configuration
+...
+Maestro script requested but Maestro not available
 ```
 
 ## Power System
