@@ -83,13 +83,14 @@ WiFiServer server(80);
 
 // Variable to store the HTTP request
 String header;
+#define MAX_HEADER_SIZE 512  // Limit header size to prevent memory issues
 
 // Current time
 unsigned long currentTime = millis();
 // Previous time
 unsigned long previousTime = 0; 
-// Define timeout time in milliseconds (example: 2000ms = 2s)
-const long timeoutTime = 2000;
+// Define timeout time in milliseconds (optimized for faster response)
+const long timeoutTime = 1000;  // Reduced from 2000ms to 1000ms
 
 void setup() {
   Serial.begin(115200);
@@ -191,29 +192,31 @@ void setEmote(const Emote &emote) {
   }
 }
 
-// Helper function to generate emote button HTML
+// Helper function to generate emote button HTML (optimized)
 void createEmoteButton(WiFiClient &client, const Emote &emote) {
-  client.print("<a href=\"/maestro/");
-  client.print(emote.path);
-  client.print("\" class=\"button\">");
-  client.print(emote.label);
-  client.println("</a>");
+  // Combine multiple small writes into one for better performance
+  String button = String("<a href=\"/maestro/") + emote.path + "\" class=\"button\">" + emote.label + "</a>";
+  client.println(button);
 }
 
 void loop(){
   WiFiClient client = server.accept();   // Listen for incoming clients
 
   if (client) {                             // If a new client connects,
+    client.setNoDelay(true);                // Disable Nagle's algorithm for faster response
     currentTime = millis();
     previousTime = currentTime;
     Serial.println("New Client.");          // print a message out in the serial port
+    header.reserve(MAX_HEADER_SIZE);        // Pre-allocate memory to avoid reallocation
     String currentLine = "";                // make a String to hold incoming data from the client
     while (client.connected() && currentTime - previousTime <= timeoutTime) {  // loop while the client's connected
       currentTime = millis();
       if (client.available()) {             // if there's bytes to read from the client,
         char c = client.read();             // read a byte, then
-        Serial.write(c);                    // print it out the serial monitor
-        header += c;
+        // Only add to header if we haven't exceeded max size
+        if (header.length() < MAX_HEADER_SIZE) {
+          header += c;
+        }
         if (c == '\n') {                    // if the byte is a newline character
           // if the current line is blank, you got two newline characters in a row.
           // that's the end of the client HTTP request, so send a response:
@@ -225,42 +228,42 @@ void loop(){
             client.println("Connection: close");
             client.println();
             
-            // Handle emote requests
+            // Handle emote requests (optimized - check path directly)
             for (int i = 0; i < numEmotes; i++) {
-              String path = "/maestro/";
-              path += emotes[i].path;
-              if (header.indexOf("GET " + path) >= 0) {
+              // Build path string once and check
+              String searchPath = String("GET /maestro/") + emotes[i].path;
+              if (header.indexOf(searchPath) >= 0) {
                 setEmote(emotes[i]);
                 break;
               }
             }
             
             
-            // Display the HTML web page
-            client.println("<!DOCTYPE html><html>");
-            client.println("<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
-            client.println("<link rel=\"icon\" href=\"data:,\">");
-            // CSS optimized for landscape tablet
-            client.println("<style>");
-            client.println("* { margin: 0; padding: 0; box-sizing: border-box; }");
-            client.println("html { font-family: Helvetica, Arial, sans-serif; }");
-            client.println("body { background-color: #1a1a1a; color: #ffffff; padding: 20px; }");
-            client.println("h1 { text-align: center; margin-bottom: 30px; font-size: 48px; }");
-            client.println(".button-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; max-width: 1200px; margin: 0 auto; }");
-            client.print(".button { background-color: ");
+            // Display the HTML web page (optimized with larger chunks)
+            client.print(
+              "<!DOCTYPE html><html>"
+              "<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+              "<link rel=\"icon\" href=\"data:,\">"
+              "<style>"
+              "* { margin: 0; padding: 0; box-sizing: border-box; }"
+              "html { font-family: Helvetica, Arial, sans-serif; }"
+              "body { background-color: #1a1a1a; color: #ffffff; padding: 20px; }"
+              "h1 { text-align: center; margin-bottom: 30px; font-size: 48px; }"
+              ".button-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; max-width: 1200px; margin: 0 auto; }"
+              ".button { background-color: "
+            );
             client.print(droidcolor);
-            client.println("; border: none; border-radius: 12px; color: white; padding: 30px 20px;");
-            client.println("text-decoration: none; font-size: 28px; font-weight: bold; cursor: pointer;");
-            client.println("transition: all 0.3s; display: block; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }");
-            client.println(".button:hover { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(0,0,0,0.4); opacity: 0.9; }");
-            client.println(".button:active { transform: translateY(0); box-shadow: 0 2px 4px rgba(0,0,0,0.3); }");
-            client.println("</style></head>");
-            
-            // Web Page Heading
-            client.print("<body><h1>");
+            client.print(
+              "; border: none; border-radius: 12px; color: white; padding: 30px 20px;"
+              "text-decoration: none; font-size: 28px; font-weight: bold; cursor: pointer;"
+              "transition: all 0.3s; display: block; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }"
+              ".button:hover { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(0,0,0,0.4); opacity: 0.9; }"
+              ".button:active { transform: translateY(0); box-shadow: 0 2px 4px rgba(0,0,0,0.3); }"
+              "</style></head>"
+              "<body><h1>"
+            );
             client.print(droidname);
-            client.println(" Control System</h1>");
-            client.println("<div class=\"button-grid\">");
+            client.print(" Control System</h1><div class=\"button-grid\">");
 
             // emote buttons
             for (int i = 0; i < numEmotes; i++) {
@@ -283,6 +286,8 @@ void loop(){
     }
     // Clear the header variable
     header = "";
+    // Ensure all data is sent before closing
+    client.flush();
     // Close the connection
     client.stop();
     Serial.println("Client disconnected.");
