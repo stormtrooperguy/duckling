@@ -98,15 +98,21 @@ Edit these variables at the top of the sketch:
 #define DEBUG_MODE false  // Set to true for verbose serial debugging
 
 // Droid Configuration
-String droidname = "Grek";           // WiFi SSID name
+String droidname = "YourDroidName";  // WiFi SSID name - CHANGE THIS!
 String droidcolor = "green";         // Button color (CSS color name)
-const char* ap_password = "k7Rm9pQx2w";  // WiFi password (8-63 chars)
+const char* ap_password = "CHANGE_ME_12345";  // WiFi password (8-63 chars) - CHANGE THIS!
 
 // LED Configuration
 #define NUM_LEDS 3        // Number of LEDs
 #define LED_PIN 5         // Data pin for LED strip
 #define LED_TYPE WS2812B  // LED chip type
 ```
+
+**⚠️ SECURITY NOTE**: Before deploying your code:
+1. Change `droidname` to your desired WiFi network name
+2. Change `ap_password` to a strong, unique password (8-63 characters)
+3. Never commit real passwords to source control
+4. Use different passwords for different droids
 
 ### Debug Mode
 
@@ -172,8 +178,10 @@ All serial port settings are centralized at the top of the sketch for easy confi
 - **IP Address**: 192.168.4.1 (fixed)
 - **Network**: 192.168.4.0/24
 - **Gateway**: 192.168.4.1
-- **SSID**: Uses `droidname` variable
-- **Password**: Uses `ap_password` variable
+- **SSID**: Uses `droidname` variable (must be customized)
+- **Password**: Uses `ap_password` variable (must be customized)
+
+**Remember**: Always change the default SSID and password before first use!
 
 ### DFPlayer Volume
 
@@ -200,8 +208,8 @@ FastLED.setBrightness(50);  // Default: 50
 ### Connecting
 
 1. **Connect to WiFi**:
-   - SSID: `Grek` (or your droidname)
-   - Password: `k7Rm9pQx2w` (or your custom password)
+   - SSID: Your configured droidname (e.g., "R2D2")
+   - Password: Your configured password
 
 2. **Open Web Interface**:
    - Navigate to: `http://192.168.4.1`
@@ -438,8 +446,8 @@ Initializing DFPlayer...
 DFPlayer initialized successfully
 Configuring Access Point...
 Access Point started!
-SSID: Grek
-Password: k7Rm9pQx2w
+SSID: YourDroidName
+Password: YourPassword
 AP IP address: 192.168.4.1
 Connect to this network and navigate to http://192.168.4.1
 ```

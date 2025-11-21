@@ -92,14 +92,16 @@ const Emote emotes[] = {
 };
 const int numEmotes = sizeof(emotes) / sizeof(emotes[0]);
 
+// *** IMPORTANT: Customize these values for your installation ***
 // Replace these strings to customize for your droid
-String droidname = "Grek";
-String droidcolor = "green";
+String droidname = "YourDroidName";      // Change this! Will be your WiFi SSID
+String droidcolor = "green";             // Button color (CSS color name)
 
 // Access Point credentials
-// SSID will use droidname, password is randomly generated
-// Change this password for security
-const char* ap_password = "k7Rm9pQx2w";
+// SSID will use droidname above
+// *** SECURITY: Change this password before deploying! ***
+// Password must be 8-63 characters
+const char* ap_password = "CHANGE_ME_12345";  // Change to a secure password!
 
 // Set web server port number to 80
 WiFiServer server(80);
