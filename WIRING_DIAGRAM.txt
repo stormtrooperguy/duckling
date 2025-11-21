@@ -20,10 +20,10 @@ COMPLETE SYSTEM OVERVIEW
           │            │              │          │
           │            │         ┌────┴────┐     │
           │            │         │ GPIO 5  │     │
-          │            │         │ GPIO 9  │     │
-          │            │         │ GPIO 10 │     │
           │            │         │ GPIO 16 │     │
           │            │         │ GPIO 17 │     │
+          │            │         │ GPIO 25 │     │
+          │            │         │ GPIO 26 │     │
           │            │         └────┬────┘     │
           │            │              │          │
           └────────────┴──────────────┴──────────┘
@@ -109,9 +109,9 @@ DETAILED COMPONENT CONNECTIONS
    │  │                       │                 │
    │  │        ┌──────────────┤ GND             │  ESP32
    │  └────────┤              │                 │  Serial2
-   │           │   ┌──────────┤ GPIO 9 (RX2)    │
+   │           │   ┌──────────┤ GPIO 25 (RX2)   │
    └───────────┼───┤          │                 │
-               │   └──────────┤ GPIO 10 (TX2)   │
+               │   └──────────┤ GPIO 26 (TX2)   │
                │              └─────────────────┘
             IMPORTANT!
       1kΩ resistor between
@@ -132,13 +132,16 @@ PIN ASSIGNMENT TABLE
 ESP32 GPIO    | Component         | Signal      | Notes
 --------------|-------------------|-------------|---------------------------
 GPIO 5        | LED Strip         | Data In     | WS2812B data line
-GPIO 9        | DFPlayer Mini     | RX (ESP)    | Serial2 - from DFPlayer TX
-GPIO 10       | DFPlayer Mini     | TX (ESP)    | Serial2 - to DFPlayer RX (via 1kΩ)
 GPIO 16       | Maestro           | RX (ESP)    | Serial1 - from Maestro TX
 GPIO 17       | Maestro           | TX (ESP)    | Serial1 - to Maestro RX
+GPIO 25       | DFPlayer Mini     | RX (ESP)    | Serial2 - from DFPlayer TX
+GPIO 26       | DFPlayer Mini     | TX (ESP)    | Serial2 - to DFPlayer RX (via 1kΩ)
 GND           | All Components    | Ground      | Common ground required
 5V            | LED Strip, DFP    | Power       | From 5V buck converter
 8V            | Maestro           | Power       | From 8V buck converter
+
+IMPORTANT: GPIO 9 and 10 are used for flash memory and will cause boot failures!
+           GPIO 25 and 26 are safe general-purpose pins.
 
 
 POWER DISTRIBUTION (PRODUCTION SYSTEM)
@@ -247,8 +250,8 @@ PRODUCTION SYSTEM (with 18V Battery):
   - LED Strip DIN to ESP32 GPIO 5
 
 □ Step 4: Connect DFPlayer (if using)
-  - ESP32 GPIO 10 → 1kΩ resistor → DFPlayer RX
-  - ESP32 GPIO 9 → DFPlayer TX (direct)
+  - ESP32 GPIO 26 → 1kΩ resistor → DFPlayer RX
+  - ESP32 GPIO 25 → DFPlayer TX (direct)
   - DFPlayer SPK+ and SPK- to speaker
 
 □ Step 5: Connect Maestro (if using)

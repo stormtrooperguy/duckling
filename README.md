@@ -41,8 +41,8 @@ A web-based control system for animatronic droids using ESP32, featuring LED eye
 | **LED Strip Data** | GPIO 5 | - | WS2812B data line |
 | **Maestro RX** | GPIO 16 | Serial1 | Receives from Maestro TX |
 | **Maestro TX** | GPIO 17 | Serial1 | Transmits to Maestro RX |
-| **DFPlayer RX** | GPIO 9 | Serial2 | Receives from DFPlayer TX |
-| **DFPlayer TX** | GPIO 10 | Serial2 | Transmits to DFPlayer RX |
+| **DFPlayer RX** | GPIO 25 | Serial2 | Receives from DFPlayer TX |
+| **DFPlayer TX** | GPIO 26 | Serial2 | Transmits to DFPlayer RX |
 
 **Note**: All pin assignments are easily configurable at the top of the sketch. See [Serial Port Configuration](#serial-port-configuration) below.
 
@@ -62,15 +62,17 @@ ESP32 GND          → Maestro GND
 
 ### DFPlayer Mini (Serial2)
 ```
-ESP32 GPIO 10 (TX) → DFPlayer RX (through 1kΩ resistor)
-ESP32 GPIO 9  (RX) → DFPlayer TX
+ESP32 GPIO 26 (TX) → DFPlayer RX (through 1kΩ resistor)
+ESP32 GPIO 25 (RX) → DFPlayer TX
 ESP32 GND          → DFPlayer GND
 5V                 → DFPlayer VCC
 DFPlayer SPK+      → Speaker +
 DFPlayer SPK-      → Speaker -
 ```
 
-**Note**: DFPlayer RX typically requires a 1kΩ resistor between ESP32 TX and DFPlayer RX pin.
+**Note**: 
+- DFPlayer RX typically requires a 1kΩ resistor between ESP32 TX and DFPlayer RX pin.
+- GPIO 25 and 26 are safe general-purpose pins that won't conflict with flash memory.
 
 ## Software Requirements
 
@@ -160,8 +162,8 @@ All serial port settings are centralized at the top of the sketch for easy confi
 
 // DFPlayer Mini MP3 Module
 #define DFPLAYER_SERIAL_NUM 2     // Use Serial2
-#define DFPLAYER_RX_PIN 9         // ESP32 RX (connects to DFPlayer TX)
-#define DFPLAYER_TX_PIN 10        // ESP32 TX (connects to DFPlayer RX)
+#define DFPLAYER_RX_PIN 25        // ESP32 RX (connects to DFPlayer TX)
+#define DFPLAYER_TX_PIN 26        // ESP32 TX (connects to DFPlayer RX)
 #define DFPLAYER_BAUD 9600
 ```
 
@@ -420,9 +422,15 @@ Debug mode shows:
 
 ### DFPlayer Issues
 
+**Problem**: ESP32 won't boot / constant reboot loop
+- **CRITICAL**: GPIO 9 and 10 are connected to flash memory on most ESP32 boards
+- Using these pins will prevent the ESP32 from booting
+- The code now uses GPIO 25 (RX) and GPIO 26 (TX) which are safe
+- If you modified the pins, avoid GPIO 6, 7, 8, 9, 10, 11 (flash pins)
+
 **Problem**: No sound
 - Check serial monitor for initialization errors
-- Verify serial connections match configuration (default: GPIO 9 RX, GPIO 10 TX)
+- Verify serial connections match configuration (default: GPIO 25 RX, GPIO 26 TX)
 - Check pin assignments in `DFPLAYER_RX_PIN` and `DFPLAYER_TX_PIN` definitions
 - Verify SD card is inserted and formatted (FAT32)
 - Check speaker connections

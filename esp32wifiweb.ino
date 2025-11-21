@@ -34,9 +34,12 @@
 
 // DFPlayer Mini MP3 Module
 #define DFPLAYER_SERIAL_NUM 2     // Use Serial2
-#define DFPLAYER_RX_PIN 9         // ESP32 RX (connects to DFPlayer TX)
-#define DFPLAYER_TX_PIN 10        // ESP32 TX (connects to DFPlayer RX)
+#define DFPLAYER_RX_PIN 25        // ESP32 RX (connects to DFPlayer TX) - Changed from GPIO 9
+#define DFPLAYER_TX_PIN 26        // ESP32 TX (connects to DFPlayer RX) - Changed from GPIO 10
 #define DFPLAYER_BAUD 9600
+
+// NOTE: GPIO 9 and 10 are used for flash and will cause boot issues on most ESP32 boards
+// GPIO 25 and 26 are safe general-purpose pins
 
 // Maestro library
 #include <PololuMaestro.h>
