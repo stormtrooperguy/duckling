@@ -322,9 +322,7 @@ void loop(){
     }
     // Clear the header variable
     header = "";
-    // Ensure all data is sent before closing
-    client.flush();
-    // Close the connection
+    // Close the connection (stop() handles flushing automatically)
     client.stop();
     #if DEBUG_MODE
       Serial.println("Client disconnected.");
