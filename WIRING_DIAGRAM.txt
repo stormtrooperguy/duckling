@@ -4,32 +4,31 @@ ESP32 DROID CONTROL SYSTEM - WIRING DIAGRAM
 COMPLETE SYSTEM OVERVIEW
 =========================
 
-                                    5V POWER SUPPLY
-                                         │
-                    ┌────────────────────┼────────────────────┐
-                    │                    │                    │
-                    │                    │                    │
-                 ┌──┴───┐            ┌──┴──┐             ┌───┴────┐
-                 │ LED  │            │ DF  │             │MAESTRO │
-                 │STRIP │            │PLAYER│            │ SERVO  │
-                 └──┬───┘            └──┬──┘             │ CTRL   │
-                    │                   │                └───┬────┘
-                    │                   │                    │
-              ┌─────┼───────────────────┼────────────────────┼─────┐
-              │     │                   │                    │     │
-              │  ┌──┴────────┬──────────┴────────┬───────────┴──┐  │
-              │  │  GPIO 5   │   GPIO 9  GPIO 10 │ GPIO 16  17 │  │
-              │  │  (LED)    │   (RX)     (TX)   │ (RX)    (TX)│  │
-              │  │           │  DFPlayer Serial2 │ Maestro Ser1│  │
-              │  │           │                   │             │  │
-              │  │       ESP32 DEVELOPMENT BOARD               │  │
-              │  │                                             │  │
-              │  │           GND              GND          GND │  │
-              │  └─────────────┬───────────────┬──────────────┬──┘  │
-              │                │               │              │     │
-              └────────────────┼───────────────┼──────────────┼─────┘
-                               │               │              │
-                            COMMON GROUND RAIL
+                               18V BATTERY
+                                    │
+                        ┌───────────┴────────────┐
+                        │                        │
+                   BUCK 5V                   BUCK 8V
+                        │                        │
+          ┌─────────────┼─────────────┐          │
+          │             │             │          │
+       ┌──┴───┐     ┌──┴──┐      ┌───┴────┐ ┌───┴────┐
+       │ LED  │     │ DF  │      │ ESP32  │ │MAESTRO │
+       │STRIP │     │PLAYER│     │ BOARD  │ │ SERVO  │
+       └──┬───┘     └──┬──┘      └───┬────┘ │ CTRL   │
+          │            │              │      └───┬────┘
+          │            │              │          │
+          │            │         ┌────┴────┐     │
+          │            │         │ GPIO 5  │     │
+          │            │         │ GPIO 9  │     │
+          │            │         │ GPIO 10 │     │
+          │            │         │ GPIO 16 │     │
+          │            │         │ GPIO 17 │     │
+          │            │         └────┬────┘     │
+          │            │              │          │
+          └────────────┴──────────────┴──────────┘
+                       COMMON GROUND
+              (All grounds connected including battery negative)
 
 
 DETAILED COMPONENT CONNECTIONS
@@ -138,32 +137,68 @@ GPIO 10       | DFPlayer Mini     | TX (ESP)    | Serial2 - to DFPlayer RX (via 
 GPIO 16       | Maestro           | RX (ESP)    | Serial1 - from Maestro TX
 GPIO 17       | Maestro           | TX (ESP)    | Serial1 - to Maestro RX
 GND           | All Components    | Ground      | Common ground required
-5V            | LED Strip, DFP    | Power       | From USB or external supply
--             | Maestro           | Power       | Separate 5-6V supply for servos
+5V            | LED Strip, DFP    | Power       | From 5V buck converter
+8V            | Maestro           | Power       | From 8V buck converter
 
 
-POWER DISTRIBUTION
-==================
+POWER DISTRIBUTION (PRODUCTION SYSTEM)
+========================================
 
-              EXTERNAL 5V SUPPLY (Recommended for production)
+System uses 18V battery with two buck converters:
+
+                           18V BATTERY
+                                │
+                    ┌───────────┴────────────┐
+                    │                        │
+         ┌──────────┴────────┐    ┌──────────┴────────┐
+         │  BUCK CONVERTER   │    │  BUCK CONVERTER   │
+         │   18V → 5V        │    │   18V → 8V        │
+         │   (2A-3A)         │    │   (3A-5A)         │
+         └──────────┬────────┘    └──────────┬────────┘
+                    │                        │
+            5V RAIL │                8V RAIL │
+                    │                        │
+         ┌──────────┼──────────┐             │
+         │          │          │             │
+         │          │          │             │
+    ┌────┴─────┐ ┌─┴────┐ ┌───┴──────┐ ┌────┴─────┐
+    │  ESP32   │ │ LED  │ │ DFPlayer │ │ MAESTRO  │
+    │  Board   │ │Strip │ │   Mini   │ │  Servo   │
+    └────┬─────┘ └─┬────┘ └────┬─────┘ └────┬─────┘
+         │         │           │            │
+         └─────────┴───────────┴────────────┘
+                   COMMON GROUND
+        (Connect all grounds together including battery negative!)
+
+Power Budget:
+  5V Rail: ESP32 (500mA) + LEDs (180mA) + DFPlayer (50mA) = ~750mA
+  8V Rail: Depends on servos (typically 3-5A for multiple servos)
+
+
+TESTING POWER SETUP (USB ONLY - NO SERVOS)
+============================================
+
+For initial testing with USB power (LEDs and web interface only):
+
+                    USB Cable
                         │
-         ┌──────────────┼──────────────┐
-         │              │              │
-         │              │              │
-    ┌────┴─────┐   ┌────┴─────┐  ┌────┴──────┐
-    │  ESP32   │   │   LED    │  │ DFPlayer  │
-    │  Board   │   │  Strip   │  │   Mini    │
-    └──────────┘   └──────────┘  └───────────┘
+                   ┌────┴─────┐
+                   │  ESP32   │
+                   │  Board   │
+                   └────┬─────┘
+                        │ 5V Pin
+              ┌─────────┼─────────┐
+              │                   │
+         ┌────┴─────┐        ┌────┴──────┐
+         │   LED    │        │ DFPlayer  │
+         │  Strip   │        │   Mini    │
+         └──────────┘        └───────────┘
 
-    SEPARATE SUPPLY (REQUIRED)
-         │
-    ┌────┴─────┐
-    │ MAESTRO  │
-    │  Servo   │  (5-6V depending on servos)
-    │  Board   │
-    └──────────┘
-
-    All grounds must be connected together!
+Notes for USB testing:
+- Set MAESTRO_ENABLED false in code
+- Connect LED strip to ESP32 5V pin (NOT VIN)
+- USB can provide ~500mA - sufficient for 3 LEDs + DFPlayer
+- DO NOT connect servos when using USB power!
 
 
 MINIMAL WIRING (LED-ONLY CONFIGURATION)
@@ -185,16 +220,28 @@ Simple wiring:
 STEP-BY-STEP WIRING CHECKLIST
 ==============================
 
+PRODUCTION SYSTEM (with 18V Battery):
+
+□ Step 0: Setup power system
+  - Connect 18V battery to both buck converter inputs
+  - Configure first buck converter for 5V output (verify with multimeter)
+  - Configure second buck converter for 8V output (verify with multimeter)
+  - Connect battery negative to common ground rail
+
 □ Step 1: Connect all ground connections first
-  - ESP32 GND to common ground rail
+  - Battery negative (GND) to ground rail
+  - Both buck converter grounds to ground rail
+  - ESP32 GND to ground rail
   - LED Strip GND to ground rail
   - DFPlayer GND to ground rail (if using)
   - Maestro GND to ground rail (if using)
 
-□ Step 2: Connect power
-  - LED Strip VCC to 5V
-  - DFPlayer VCC to 5V (if using)
-  - Maestro to separate 5-6V supply (if using)
+□ Step 2: Connect power rails
+  - 5V buck converter output to 5V distribution rail
+  - 8V buck converter output to Maestro power input
+  - ESP32 5V pin to 5V rail
+  - LED Strip VCC to 5V rail
+  - DFPlayer VCC to 5V rail (if using)
 
 □ Step 3: Connect LED data
   - LED Strip DIN to ESP32 GPIO 5
@@ -219,16 +266,70 @@ STEP-BY-STEP WIRING CHECKLIST
   - Verify initialization messages
 
 
+BUCK CONVERTER RECOMMENDATIONS
+================================
+
+For 5V Rail (ESP32, LEDs, DFPlayer):
+  Input: 18V DC
+  Output: 5V DC regulated
+  Current Rating: 2A minimum (3A recommended)
+  Features: Adjustable output, overcurrent protection, heat sink
+  Example: LM2596 based modules, XL4015 modules
+
+For 8V Rail (Maestro Servos):
+  Input: 18V DC
+  Output: 8V DC regulated
+  Current Rating: 3-5A minimum (depends on servos)
+  Features: High current capability, adjustable output, thermal protection
+  Example: LM2596 (for lighter servo loads), XL4016 (for heavy loads)
+
+Important:
+  - Verify output voltage with multimeter BEFORE connecting components
+  - Buck converters generate heat - ensure adequate cooling/heat sinking
+  - Add fuses: 2A on 5V output, appropriate rating on 8V output
+  - Use thick wire (18-20 AWG) for battery and high-current connections
+  - Mount converters securely with good ventilation
+
+
+BATTERY SAFETY
+===============
+
+18V Battery Considerations:
+  - Use appropriate battery type (LiPo 5S, Li-ion pack, etc.)
+  - Ensure battery has proper protection circuit (BMS)
+  - Check battery capacity matches current draw
+  - Add master power switch for easy shutdown
+  - Use appropriate connectors (XT60, Deans, etc.)
+  - Never short battery terminals
+  - Monitor battery voltage during operation
+  - Disconnect battery when not in use
+
+Suggested Battery Capacity:
+  - Minimum: 2000mAh (for short operation)
+  - Recommended: 3000-5000mAh (for extended operation)
+  - Calculate runtime: Capacity (mAh) / Total Current Draw (mA)
+
+
 COMMON MISTAKES TO AVOID
 =========================
 
+Power Related:
+❌ Not connecting common ground (battery negative must connect to all grounds)
+❌ Buck converter output voltage not verified before connecting components
+❌ Insufficient current rating on buck converters
+❌ No fuses on power rails
+❌ Battery polarity reversed
+❌ Powering servos from ESP32 5V pin (will cause brownout/damage)
+
+Wiring Related:
 ❌ Forgetting 1kΩ resistor on DFPlayer RX line
-❌ Swapping TX/RX connections (TX → RX, RX → TX)
-❌ Not connecting common ground
-❌ Powering servos from ESP32 (will brownout)
-❌ Using same power supply for ESP32 and high-current servos
-❌ Wrong baud rate settings
+❌ Swapping TX/RX connections (remember: TX → RX, RX → TX)
+❌ Wrong baud rate settings (should be 9600 for both Maestro and DFPlayer)
+
+Data Related:
 ❌ SD card not FAT32 formatted
+❌ MP3 files not named correctly (should be 0001.mp3, 0002.mp3, etc.)
+❌ MAESTRO_ENABLED set to false when servos are connected
 
 
 TROUBLESHOOTING BY LED BEHAVIOR

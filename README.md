@@ -417,16 +417,54 @@ MP3 requested but DFPlayer not available
 Activating maestro sequence 2
 ```
 
-## Power Considerations
+## Power System
+
+### Recommended Power Setup
+
+This system is designed to run from an **18V battery** with buck converters:
+
+```
+18V Battery
+    │
+    ├─── Buck Converter (18V → 5V, 2A+) ──→ ESP32, LEDs, DFPlayer
+    │
+    └─── Buck Converter (18V → 8V, servo current) ──→ Maestro Servo Controller
+```
 
 ### Power Requirements
 
+**5V Rail (from first buck converter):**
 - **ESP32**: ~500mA (WiFi active)
 - **LED Strip**: ~60mA per LED at full brightness (3 LEDs = 180mA max)
-- **Servos**: Varies (check Maestro power separately)
 - **DFPlayer**: ~50mA
+- **Total 5V**: ~750mA (recommend 2A+ converter for headroom)
 
-**Recommended**: Use separate 5V power supply for servos. ESP32 and LEDs can share USB power for testing, but dedicated supply recommended for production.
+**8V Rail (from second buck converter):**
+- **Servos**: Varies by servo type and quantity
+- Calculate based on your specific servos (stall current × number of servos)
+- Typical hobby servo: 500mA-2A under load
+- Size buck converter accordingly
+
+### Buck Converter Specifications
+
+**For 5V Rail:**
+- Input: 18V
+- Output: 5V regulated
+- Current: Minimum 2A (3A recommended)
+- Must handle ~750mA continuous + spikes
+
+**For 8V Rail:**
+- Input: 18V  
+- Output: 8V regulated
+- Current: Based on servo requirements (typically 3A-5A minimum)
+- Must handle servo stall current
+
+### Important Notes
+
+- **Common Ground**: All grounds (battery, both buck converters, ESP32, Maestro) must be connected together
+- **Testing**: For initial testing, USB power to ESP32 is acceptable (LEDs only, no servos)
+- **Production**: Always use battery + buck converter system for mobile operation
+- **Fusing**: Add appropriate fuses on both buck converter outputs for safety
 
 ## License
 
