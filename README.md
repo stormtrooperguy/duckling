@@ -22,12 +22,12 @@ A web-based control system for animatronic droids using ESP32, featuring LED eye
 - **Pololu Maestro Servo Controller** (Mini Maestro) - optional, can be disabled
 - **DFPlayer Mini MP3 Module** - optional, auto-detected
 - **MicroSD Card** (for DFPlayer, if using audio)
-- **5V Power Supply** (adequate for servos and LEDs)
+- **Power Supply** 18V tool battery expected; 5V input adequate to power lights and sound, but not servos
 
-**Note**: Both the Maestro and DFPlayer are optional. The system will operate with LEDs and web interface even if these modules are not connected.
+**Note**: Both the Maestro and DFPlayer are optional, though without the Maestro it's not a very exciting project. The system will operate with LEDs and web interface even if these modules are not connected.
 
 ### Recommended
-- Tablet (landscape orientation) for web interface
+- Tablet (landscape orientation) for web interface; Phone will work too.
 - Speaker (for DFPlayer audio output)
 
 ## Wiring Connections
