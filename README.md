@@ -11,7 +11,7 @@ A web-based control system for animatronic droids using ESP32, featuring LED eye
 - **Sound Effects**: Optional DFPlayer Mini for MP3 audio playback
 - **Modular Design**: Run with any combination of components (LEDs only, LEDs + Servos, full system)
 - **Emotes System**: Pre-configured emotional states with coordinated eye colors and servo movements
-- **Actions System**: Utility functions (like flashlight) that preserve eye state
+- **Actions System**: Utility functions (like flashlight toggle) that preserve eye state
 - **Eye Colors System**: Quick eye color changes without servo movements (6 colors available)
 - **Performance Optimized**: Fast HTTP response (~200-400ms) with optional debug mode for development
 
@@ -242,8 +242,7 @@ Actions provide utility functions without changing eye colors:
 
 | Action | Eye Color | LED 3 | Description |
 |--------|-----------|-------|-------------|
-| **flashlight on** | Preserved | White | Turn on LED 3 as flashlight |
-| **flashlight off** | Preserved | Off | Turn off LED 3 flashlight |
+| **flashlight** | Preserved | Toggle | Toggle LED 3 flashlight on/off |
 
 **Note**: "Preserved" means the action maintains the current eye color (LEDs 1 & 2) while only affecting LED 3.
 
@@ -304,6 +303,8 @@ const Button actions[] = {
   //                                                              Preserve eyes: true
 };
 ```
+
+**Note**: The flashlight action has special toggle logic in the code. For simple actions, use `triggerButton()`. For custom toggle behavior, add special handling in the action request loop (see flashlight implementation).
 
 For a new eye color (changes eyes only), add to `eyeColors[]`:
 
@@ -662,7 +663,7 @@ For issues or questions:
   - DFPlayer Mini MP3 support
   - Ultra-compact web interface optimized for 8" landscape tablets
   - 9 pre-configured emotes (emotional expressions)
-  - 2 utility actions (flashlight control)
+  - 1 utility action (flashlight toggle)
   - 6 eye color options (quick color changes without servo movements)
   - Automatic white eye startup
 

@@ -95,8 +95,7 @@ const int numEmotes = sizeof(emotes) / sizeof(emotes[0]);
 // ACTIONS: Utility functions that don't change eye colors
 const Button actions[] = {
   // path          label           colorName  LED1&2 color   LED3 color      preserve12  preserve3  script# mp3#
-  {"flashlight_on",  "flashlight on",  "Flashlight On",  CRGB::Black, CRGB::White, true, false, -1,     -1},
-  {"flashlight_off", "flashlight off", "Flashlight Off", CRGB::Black, CRGB::Black, true, false, -1,     -1}
+  {"flashlight",  "flashlight",  "Flashlight Toggle",  CRGB::Black, CRGB::White, true, false, -1,     -1}
 };
 const int numActions = sizeof(actions) / sizeof(actions[0]);
 
@@ -343,7 +342,24 @@ void loop(){
             for (int i = 0; i < numActions; i++) {
               String searchPath = String("GET /maestro/") + actions[i].path;
               if (header.indexOf(searchPath) >= 0) {
-                triggerButton(actions[i]);
+                // Special handling for flashlight toggle
+                if (String(actions[i].path) == "flashlight") {
+                  // Toggle LED 3: if it's on (not black), turn off; if off, turn white
+                  if (leds[2] == CRGB::Black) {
+                    leds[2] = CRGB::White;
+                    lastEmote = "flashlight on";
+                  } else {
+                    leds[2] = CRGB::Black;
+                    lastEmote = "flashlight off";
+                  }
+                  FastLED.show();
+                  #if DEBUG_MODE
+                    Serial.print("Flashlight toggled: ");
+                    Serial.println(lastEmote);
+                  #endif
+                } else {
+                  triggerButton(actions[i]);
+                }
                 break;
               }
             }
