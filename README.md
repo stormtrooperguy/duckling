@@ -12,6 +12,7 @@ A web-based control system for animatronic droids using ESP32, featuring LED eye
 - **Modular Design**: Run with any combination of components (LEDs only, LEDs + Servos, full system)
 - **Emotes System**: Pre-configured emotional states with coordinated eye colors and servo movements
 - **Actions System**: Utility functions (like flashlight) that preserve eye state
+- **Eye Colors System**: Quick eye color changes without servo movements (6 colors available)
 - **Performance Optimized**: Fast HTTP response (~200-400ms) with optional debug mode for development
 
 ## Hardware Requirements
@@ -246,24 +247,41 @@ Actions provide utility functions without changing eye colors:
 
 **Note**: "Preserved" means the action maintains the current eye color (LEDs 1 & 2) while only affecting LED 3.
 
-## Adding New Emotes or Actions
+### Available Eye Colors
 
-### Emotes vs Actions
+Eye colors change only the eye LEDs without triggering servos (preserves flashlight state):
+
+| Color | Eye Color | LED 3 | Servo | Description |
+|-------|-----------|-------|-------|-------------|
+| **white** | White | Preserved | No | Set eyes to white |
+| **yellow** | Yellow | Preserved | No | Set eyes to yellow |
+| **green** | Green | Preserved | No | Set eyes to green |
+| **red** | Red | Preserved | No | Set eyes to red |
+| **blue** | Blue | Preserved | No | Set eyes to blue |
+| **purple** | Purple | Preserved | No | Set eyes to purple |
+
+**Note**: Eye color buttons preserve the flashlight state (LED 3) while changing eye colors.
+
+## Adding New Emotes, Actions, or Eye Colors
+
+### Emotes vs Actions vs Eye Colors
 
 - **Emotes**: Change eye colors (LEDs 1 & 2) and typically trigger servo sequences
 - **Actions**: Utility functions that preserve eye color and usually only affect LED 3
+- **Eye Colors**: Change eye colors without servos, preserving LED 3 (flashlight) state
 
 ### Step 1: Add to Appropriate Array
 
-For a new emote (changes eye color), add to `emotes[]`:
+For a new emote (changes eye color + servos), add to `emotes[]`:
 
 ```cpp
 const Button emotes[] = {
   // ... existing emotes ...
-  {"newemote", "New Emote", "Orange", CRGB::Orange, CRGB::Black, false, 12, 5},
-  //    |           |           |          |            |         |      |   |
-  //    |           |           |          |            |         |      |   MP3 track (or -1)
-  //    |           |           |          |            |         |      Maestro script (or -1)
+  {"newemote", "New Emote", "Orange", CRGB::Orange, CRGB::Black, false, false, 12, 5},
+  //    |           |           |          |            |         |      |      |   |
+  //    |           |           |          |            |         |      |      |   MP3 track (or -1)
+  //    |           |           |          |            |         |      |      Maestro script (or -1)
+  //    |           |           |          |            |         |      Preserve LED 3? (false)
   //    |           |           |          |            |         Preserve LED 1&2? (false for emotes)
   //    |           |           |          |            LED 3 color
   //    |           |           |          LED 1&2 color
@@ -278,11 +296,26 @@ For a new action (preserves eye color), add to `actions[]`:
 ```cpp
 const Button actions[] = {
   // ... existing actions ...
-  {"myaction", "My Action", "Action", CRGB::Black, CRGB::Purple, true, -1, 7},
-  //                                                              |     |    |
-  //                                                              |     |    MP3 track
-  //                                                              |     No servo script
+  {"myaction", "My Action", "Action", CRGB::Black, CRGB::Purple, true, false, -1, 7},
+  //                                                              |     |      |    |
+  //                                                              |     |      |    MP3 track
+  //                                                              |     |      No servo script
+  //                                                              |     Preserve LED 3? (false)
   //                                                              Preserve eyes: true
+};
+```
+
+For a new eye color (changes eyes only), add to `eyeColors[]`:
+
+```cpp
+const Button eyeColors[] = {
+  // ... existing colors ...
+  {"color_orange", "orange", "Orange", CRGB::Orange, CRGB::Black, false, true, -1, -1},
+  //                                                               |      |     |    |
+  //                                                               |      |     |    No MP3
+  //                                                               |      |     No servo
+  //                                                               |      Preserve LED 3: true!
+  //                                                               Change eyes: false
 };
 ```
 
@@ -292,8 +325,9 @@ const Button actions[] = {
 - **label**: Button text shown on web interface
 - **colorName**: Descriptive name for serial debugging
 - **color**: LED 1&2 color (ignored if preserveLED12 is true)
-- **led3Color**: LED 3 color (CRGB::Black for off, CRGB::White for flashlight)
-- **preserveLED12**: `false` for emotes (changes eyes), `true` for actions (preserves eyes)
+- **led3Color**: LED 3 color (ignored if preserveLED3 is true)
+- **preserveLED12**: `false` for emotes/eye colors (changes eyes), `true` for actions (preserves eyes)
+- **preserveLED3**: `true` for eye colors (preserve flashlight), `false` for emotes/actions
 - **scriptNumber**: Maestro script number (0+) or `-1` for none
 - **mp3Track**: MP3 file number (1+) or `-1` for no sound
 
@@ -357,8 +391,9 @@ Each emote can trigger a Maestro script. Program your servo sequences in Maestro
 The web interface uses a responsive grid layout optimized for 8" landscape tablets:
 
 - **Header**: Droid name and title (32px compact)
-- **Emotes Section**: Emotional expressions with eye color changes
+- **Emotes Section**: Emotional expressions with eye color changes and servo movements
 - **Actions Section**: Utility functions that preserve eye state
+- **Eye Colors Section**: Quick eye color changes without servo movements
 - **Status Console**: Real-time feedback at bottom of screen (compact 12px font)
 - **Button Grid**: Auto-arranges buttons across available width (150px minimum)
 - **Dark Theme**: Reduces eye strain
@@ -627,5 +662,6 @@ For issues or questions:
   - Compact web interface optimized for 8" landscape tablets
   - 9 pre-configured emotes (emotional expressions)
   - 2 utility actions (flashlight control)
+  - 6 eye color options (quick color changes without servo movements)
   - Automatic white eye startup
 

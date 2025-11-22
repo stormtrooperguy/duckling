@@ -63,7 +63,7 @@ bool dfPlayerAvailable = false;     // Track if DFPlayer initialized successfull
 #define COLOR_ORDER GRB
 CRGB leds[NUM_LEDS];
 
-// Button definition structure (used for both Emotes and Actions)
+// Button definition structure (used for Emotes, Actions, and Eye Colors)
 struct Button {
   const char* path;        // URL path (e.g., "sleep")
   const char* label;       // Button label (e.g., "go to sleep")
@@ -71,6 +71,7 @@ struct Button {
   CRGB color;              // LED color for LEDs 1 & 2
   CRGB led3Color;          // LED 3 color (separate control)
   bool preserveLED12;      // If true, don't change LEDs 1 & 2
+  bool preserveLED3;       // If true, don't change LED 3
   int scriptNumber;        // Maestro script number (-1 = no script)
   int mp3Track;            // DFPlayer track number (-1 = no sound)
 };
@@ -78,26 +79,38 @@ struct Button {
 // EMOTES: Change eye colors and trigger servo sequences
 // Ordered to match Maestro script programming (0-8)
 const Button emotes[] = {
-  // path          label           colorName  LED1&2 color   LED3 color      preserve12  script# mp3#
-  {"angry",        "angry",        "Red",     CRGB::Red,     CRGB::Black,    false,      0,      -1},
-  {"curious",      "curious",      "Yellow",  CRGB::Yellow,  CRGB::Black,    false,      1,      -1},
-  {"happy",        "happy",        "Green",   CRGB::Green,   CRGB::Black,    false,      2,      -1},
-  {"sad",          "sad",          "Blue",    CRGB::Blue,    CRGB::Black,    false,      3,      -1},
-  {"sleep",        "go to sleep",  "Off",     CRGB::Black,   CRGB::Black,    false,      4,      -1},
-  {"wake",         "wake up",      "White",   CRGB::White,   CRGB::Black,    false,      5,      -1},
-  {"yes",          "yes",          "Green",   CRGB::Green,   CRGB::Black,    false,      6,      -1},
-  {"no",           "no",           "Red",     CRGB::Red,     CRGB::Black,    false,      7,      -1},
-  {"scared",       "scared",       "Purple",  CRGB::Purple,  CRGB::Black,    false,      8,      -1}
+  // path          label           colorName  LED1&2 color   LED3 color      preserve12  preserve3  script# mp3#
+  {"angry",        "angry",        "Red",     CRGB::Red,     CRGB::Black,    false,      false,     0,      -1},
+  {"curious",      "curious",      "Yellow",  CRGB::Yellow,  CRGB::Black,    false,      false,     1,      -1},
+  {"happy",        "happy",        "Green",   CRGB::Green,   CRGB::Black,    false,      false,     2,      -1},
+  {"sad",          "sad",          "Blue",    CRGB::Blue,    CRGB::Black,    false,      false,     3,      -1},
+  {"sleep",        "go to sleep",  "Off",     CRGB::Black,   CRGB::Black,    false,      false,     4,      -1},
+  {"wake",         "wake up",      "White",   CRGB::White,   CRGB::Black,    false,      false,     5,      -1},
+  {"yes",          "yes",          "Green",   CRGB::Green,   CRGB::Black,    false,      false,     6,      -1},
+  {"no",           "no",           "Red",     CRGB::Red,     CRGB::Black,    false,      false,     7,      -1},
+  {"scared",       "scared",       "Purple",  CRGB::Purple,  CRGB::Black,    false,      false,     8,      -1}
 };
 const int numEmotes = sizeof(emotes) / sizeof(emotes[0]);
 
 // ACTIONS: Utility functions that don't change eye colors
 const Button actions[] = {
-  // path          label           colorName  LED1&2 color   LED3 color      preserve12  script# mp3#
-  {"flashlight_on",  "flashlight on",  "Flashlight On",  CRGB::Black, CRGB::White, true, -1,     -1},
-  {"flashlight_off", "flashlight off", "Flashlight Off", CRGB::Black, CRGB::Black, true, -1,     -1}
+  // path          label           colorName  LED1&2 color   LED3 color      preserve12  preserve3  script# mp3#
+  {"flashlight_on",  "flashlight on",  "Flashlight On",  CRGB::Black, CRGB::White, true, false, -1,     -1},
+  {"flashlight_off", "flashlight off", "Flashlight Off", CRGB::Black, CRGB::Black, true, false, -1,     -1}
 };
 const int numActions = sizeof(actions) / sizeof(actions[0]);
+
+// EYE COLORS: Just change eye colors without servo movements (preserves flashlight state)
+const Button eyeColors[] = {
+  // path          label           colorName  LED1&2 color   LED3 color      preserve12  preserve3  script# mp3#
+  {"color_white",  "white",        "White",   CRGB::White,   CRGB::Black,    false,      true,      -1,     -1},
+  {"color_yellow", "yellow",       "Yellow",  CRGB::Yellow,  CRGB::Black,    false,      true,      -1,     -1},
+  {"color_green",  "green",        "Green",   CRGB::Green,   CRGB::Black,    false,      true,      -1,     -1},
+  {"color_red",    "red",          "Red",     CRGB::Red,     CRGB::Black,    false,      true,      -1,     -1},
+  {"color_blue",   "blue",         "Blue",    CRGB::Blue,    CRGB::Black,    false,      true,      -1,     -1},
+  {"color_purple", "purple",       "Purple",  CRGB::Purple,  CRGB::Black,    false,      true,      -1,     -1}
+};
+const int numEyeColors = sizeof(eyeColors) / sizeof(eyeColors[0]);
 
 // *** IMPORTANT: Customize these values for your installation ***
 // Replace these strings to customize for your droid
@@ -243,8 +256,11 @@ void triggerButton(const Button &button) {
     leds[1] = button.color;  // LED 2
   }
   
-  // Always update LED 3
-  leds[2] = button.led3Color;
+  // Only update LED 3 if not preserving its state
+  if (!button.preserveLED3) {
+    leds[2] = button.led3Color;
+  }
+  
   FastLED.show();
   
   // Play MP3 track if specified (mp3Track >= 0) and DFPlayer is available
@@ -332,6 +348,14 @@ void loop(){
               }
             }
             
+            // Handle eye color requests
+            for (int i = 0; i < numEyeColors; i++) {
+              String searchPath = String("GET /maestro/") + eyeColors[i].path;
+              if (header.indexOf(searchPath) >= 0) {
+                triggerButton(eyeColors[i]);
+                break;
+              }
+            }
             
             // Display the HTML web page (optimized with larger chunks)
             client.print(
@@ -379,6 +403,13 @@ void loop(){
             client.println("<h2>Actions</h2><div class=\"button-grid\">");
             for (int i = 0; i < numActions; i++) {
               createButton(client, actions[i]);
+            }
+            client.println("</div>");
+            
+            // Eye Colors section
+            client.println("<h2>Eye Colors</h2><div class=\"button-grid\">");
+            for (int i = 0; i < numEyeColors; i++) {
+              createButton(client, eyeColors[i]);
             }
             client.println("</div>");
             
