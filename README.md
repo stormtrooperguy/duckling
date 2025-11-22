@@ -390,14 +390,14 @@ Each emote can trigger a Maestro script. Program your servo sequences in Maestro
 
 The web interface uses a responsive grid layout optimized for 8" landscape tablets:
 
-- **Header**: Droid name and title (32px compact)
+- **Header**: Droid name and title (24px ultra-compact)
 - **Emotes Section**: Emotional expressions with eye color changes and servo movements
 - **Actions Section**: Utility functions that preserve eye state
 - **Eye Colors Section**: Quick eye color changes without servo movements
-- **Status Console**: Real-time feedback at bottom of screen (compact 12px font)
-- **Button Grid**: Auto-arranges buttons across available width (150px minimum)
+- **Status Console**: Real-time feedback at bottom of screen (9px font)
+- **Button Grid**: Auto-arranges buttons across available width (112px minimum)
 - **Dark Theme**: Reduces eye strain
-- **Touch-Friendly Buttons**: Sized appropriately for 8" tablet screens
+- **Touch-Friendly Buttons**: Compact sizing optimized for 8" tablet screens
 
 ### Customization
 
@@ -408,16 +408,17 @@ String droidcolor = "green";  // Any CSS color name or hex code
 
 **UI Sizing (for different screen sizes):**
 
-The interface is optimized for 8" tablets. To adjust for larger/smaller screens, modify these CSS values in the code:
+The interface is optimized for 8" tablets with compact sizing. To adjust for larger/smaller screens, modify these CSS values in the code:
 
 | Element | Current (8" tablet) | Larger Screens | Smaller Screens |
 |---------|---------------------|----------------|-----------------|
-| h1 font-size | 32px | 48px | 24px |
-| h2 font-size | 22px | 32px | 18px |
-| Button font-size | 20px | 28px | 16px |
-| Button padding | 20px 15px | 30px 20px | 15px 10px |
-| Button min-width | 150px | 200px | 120px |
-| Gap spacing | 10px | 15px | 8px |
+| h1 font-size | 24px | 32px | 18px |
+| h2 font-size | 17px | 22px | 14px |
+| Button font-size | 15px | 20px | 12px |
+| Button padding | 15px 11px | 20px 15px | 12px 8px |
+| Button min-width | 112px | 150px | 90px |
+| Gap spacing | 8px | 10px | 6px |
+| Status font-size | 9px | 12px | 8px |
 
 ### Performance Tips
 
@@ -659,7 +660,7 @@ For issues or questions:
   - FastLED eye control with 3 LEDs
   - Pololu Maestro integration
   - DFPlayer Mini MP3 support
-  - Compact web interface optimized for 8" landscape tablets
+  - Ultra-compact web interface optimized for 8" landscape tablets
   - 9 pre-configured emotes (emotional expressions)
   - 2 utility actions (flashlight control)
   - 6 eye color options (quick color changes without servo movements)
