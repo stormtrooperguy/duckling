@@ -5,7 +5,7 @@ A web-based control system for animatronic droids using ESP32, featuring LED eye
 ## Features
 
 - **WiFi Access Point**: ESP32 creates its own WiFi network for direct device control
-- **Web Interface**: Responsive landscape-optimized tablet interface with fast response times
+- **Web Interface**: Responsive landscape-optimized interface for 8" tablets with fast response times
 - **LED Eye Control**: 3 addressable LEDs (WS2812B/NeoPixel) for expressive eyes
 - **Servo Control**: Optional integration with Pololu Maestro for complex servo sequences
 - **Sound Effects**: Optional DFPlayer Mini for MP3 audio playback
@@ -27,7 +27,8 @@ A web-based control system for animatronic droids using ESP32, featuring LED eye
 **Note**: Both the Maestro and DFPlayer are optional, though without the Maestro it's not a very exciting project. The system will operate with LEDs and web interface even if these modules are not connected.
 
 ### Recommended
-- Tablet (landscape orientation) for web interface; Phone will work too.
+- 8" Tablet (landscape orientation) for web interface; optimized for this size
+- Smaller or larger screens will work but may require CSS adjustments
 - Speaker (for DFPlayer audio output)
 
 ## Wiring Connections
@@ -216,7 +217,7 @@ FastLED.setBrightness(50);  // Default: 50
 
 2. **Open Web Interface**:
    - Navigate to: `http://192.168.4.1`
-   - Interface optimized for landscape tablets
+   - Interface optimized for 8" landscape tablets
 
 ### Available Emotes
 
@@ -353,22 +354,35 @@ Each emote can trigger a Maestro script. Program your servo sequences in Maestro
 
 ### Layout
 
-The web interface uses a responsive grid layout optimized for landscape tablets:
+The web interface uses a responsive grid layout optimized for 8" landscape tablets:
 
-- **Header**: Droid name and title
+- **Header**: Droid name and title (32px compact)
 - **Emotes Section**: Emotional expressions with eye color changes
 - **Actions Section**: Utility functions that preserve eye state
-- **Status Console**: Real-time feedback at bottom of screen
-- **Button Grid**: Auto-arranges buttons across available width
+- **Status Console**: Real-time feedback at bottom of screen (compact 12px font)
+- **Button Grid**: Auto-arranges buttons across available width (150px minimum)
 - **Dark Theme**: Reduces eye strain
-- **Large Touch Targets**: Easy interaction
+- **Touch-Friendly Buttons**: Sized appropriately for 8" tablet screens
 
 ### Customization
 
-Change button color by modifying:
+**Button Color:**
 ```cpp
 String droidcolor = "green";  // Any CSS color name or hex code
 ```
+
+**UI Sizing (for different screen sizes):**
+
+The interface is optimized for 8" tablets. To adjust for larger/smaller screens, modify these CSS values in the code:
+
+| Element | Current (8" tablet) | Larger Screens | Smaller Screens |
+|---------|---------------------|----------------|-----------------|
+| h1 font-size | 32px | 48px | 24px |
+| h2 font-size | 22px | 32px | 18px |
+| Button font-size | 20px | 28px | 16px |
+| Button padding | 20px 15px | 30px 20px | 15px 10px |
+| Button min-width | 150px | 200px | 120px |
+| Gap spacing | 10px | 15px | 8px |
 
 ### Performance Tips
 
@@ -610,7 +624,7 @@ For issues or questions:
   - FastLED eye control with 3 LEDs
   - Pololu Maestro integration
   - DFPlayer Mini MP3 support
-  - Landscape tablet web interface
+  - Compact web interface optimized for 8" landscape tablets
   - 9 pre-configured emotes (emotional expressions)
   - 2 utility actions (flashlight control)
   - Automatic white eye startup
