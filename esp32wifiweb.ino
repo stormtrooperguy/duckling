@@ -76,7 +76,7 @@ struct Button {
 };
 
 // EMOTES: Change eye colors and trigger servo sequences
-// Ordered to match Maestro script programming (0-5)
+// Ordered to match Maestro script programming (0-8)
 const Button emotes[] = {
   // path          label           colorName  LED1&2 color   LED3 color      preserve12  script# mp3#
   {"angry",        "angry",        "Red",     CRGB::Red,     CRGB::Black,    false,      0,      -1},
@@ -84,7 +84,10 @@ const Button emotes[] = {
   {"happy",        "happy",        "Green",   CRGB::Green,   CRGB::Black,    false,      2,      -1},
   {"sad",          "sad",          "Blue",    CRGB::Blue,    CRGB::Black,    false,      3,      -1},
   {"sleep",        "go to sleep",  "Off",     CRGB::Black,   CRGB::Black,    false,      4,      -1},
-  {"wake",         "wake up",      "White",   CRGB::White,   CRGB::Black,    false,      5,      -1}
+  {"wake",         "wake up",      "White",   CRGB::White,   CRGB::Black,    false,      5,      -1},
+  {"yes",          "yes",          "Green",   CRGB::Green,   CRGB::Black,    false,      6,      -1},
+  {"no",           "no",           "Red",     CRGB::Red,     CRGB::Black,    false,      7,      -1},
+  {"scared",       "scared",       "Purple",  CRGB::Purple,  CRGB::Black,    false,      8,      -1}
 };
 const int numEmotes = sizeof(emotes) / sizeof(emotes[0]);
 
@@ -154,6 +157,14 @@ void setup() {
   FastLED.setBrightness(50);  // Set brightness (0-255)
   FastLED.clear();
   FastLED.show();
+  
+  // Set initial eye color to white (wake up state)
+  leds[0] = CRGB::White;  // LED 1 (eye)
+  leds[1] = CRGB::White;  // LED 2 (eye)
+  leds[2] = CRGB::Black;  // LED 3 (flashlight off)
+  FastLED.show();
+  lastEmote = "wake up (startup)";
+  Serial.println("Eyes initialized to white");
 
   // Configure Access Point
   Serial.println("Configuring Access Point...");

@@ -206,6 +206,7 @@ FastLED.setBrightness(50);  // Default: 50
 1. Upload the sketch to ESP32
 2. Open Serial Monitor (115200 baud) to see connection details
 3. ESP32 will create a WiFi access point
+4. **Eyes automatically turn white on startup** (wake up state)
 
 ### Connecting
 
@@ -229,6 +230,9 @@ Emotes change eye colors and trigger servo sequences:
 | **sad** | Blue | 3 | Sad expression |
 | **go to sleep** | Off | 4 | All LEDs off |
 | **wake up** | White | 5 | Eyes turn white |
+| **yes** | Green | 6 | Affirmative response |
+| **no** | Red | 7 | Negative response |
+| **scared** | Purple | 8 | Scared expression |
 
 ### Available Actions
 
@@ -476,6 +480,7 @@ Monitor debugging info at 115200 baud:
 Maestro serial initialized
 Initializing DFPlayer...
 DFPlayer initialized successfully
+Eyes initialized to white
 Configuring Access Point...
 Access Point started!
 SSID: YourDroidName
@@ -606,6 +611,7 @@ For issues or questions:
   - Pololu Maestro integration
   - DFPlayer Mini MP3 support
   - Landscape tablet web interface
-  - 6 pre-configured emotes (emotional expressions)
+  - 9 pre-configured emotes (emotional expressions)
   - 2 utility actions (flashlight control)
+  - Automatic white eye startup
 
