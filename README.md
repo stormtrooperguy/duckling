@@ -456,6 +456,7 @@ Debug mode shows:
 - LED color changes
 - MP3 track playback attempts
 - Maestro servo commands
+- Eye synchronization warnings (if LEDs 1 & 2 become mismatched)
 
 **Note**: Debug mode adds ~500ms overhead per operation due to serial output. Use only for troubleshooting.
 
@@ -477,6 +478,13 @@ Debug mode shows:
 - Verify LED type (WS2812B vs other types)
 - Ensure adequate 5V power supply
 - Check LED data line connection
+
+**Problem**: Eyes (LEDs 1 & 2) showing different colors
+- This is automatically detected and corrected by the code
+- If DEBUG_MODE is enabled, you'll see "WARNING: Eye LEDs out of sync!"
+- The system uses interrupt protection to prevent race conditions
+- Both eyes are automatically synchronized before each display update
+- If this happens frequently, check for loose wiring or power supply issues
 
 **Problem**: Wrong colors
 - Verify COLOR_ORDER setting (GRB vs RGB vs BRG)

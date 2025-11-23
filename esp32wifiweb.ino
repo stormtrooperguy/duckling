@@ -237,6 +237,23 @@ String getStatusHTML() {
   return status;
 }
 
+// Safety function to ensure eyes (LEDs 1 & 2) are always synchronized
+void verifyEyeSync() {
+  if (leds[0] != leds[1]) {
+    #if DEBUG_MODE
+      Serial.println("WARNING: Eye LEDs out of sync! Forcing synchronization.");
+      Serial.print("LED 0: R="); Serial.print(leds[0].r); 
+      Serial.print(" G="); Serial.print(leds[0].g); 
+      Serial.print(" B="); Serial.println(leds[0].b);
+      Serial.print("LED 1: R="); Serial.print(leds[1].r); 
+      Serial.print(" G="); Serial.print(leds[1].g); 
+      Serial.print(" B="); Serial.println(leds[1].b);
+    #endif
+    // Force both eyes to match LED 0
+    leds[1] = leds[0];
+  }
+}
+
 // Helper function to trigger button action (emote or action)
 void triggerButton(const Button &button) {
   // Track last action for status display
@@ -249,16 +266,28 @@ void triggerButton(const Button &button) {
     Serial.println(button.colorName);
   #endif
   
+  // Store color in temporary variable to ensure atomicity
+  CRGB eyeColor = button.color;
+  CRGB flashlightColor = button.led3Color;
+  
+  // Disable interrupts during LED update to prevent race conditions
+  noInterrupts();
+  
   // Only update LEDs 1 & 2 if not preserving their state
   if (!button.preserveLED12) {
-    leds[0] = button.color;  // LED 1
-    leds[1] = button.color;  // LED 2
+    leds[0] = eyeColor;  // LED 1
+    leds[1] = eyeColor;  // LED 2 (always same as LED 1)
   }
   
   // Only update LED 3 if not preserving its state
   if (!button.preserveLED3) {
-    leds[2] = button.led3Color;
+    leds[2] = flashlightColor;
   }
+  
+  interrupts();  // Re-enable interrupts
+  
+  // Verify eyes are synchronized before displaying
+  verifyEyeSync();
   
   FastLED.show();
   
@@ -345,13 +374,17 @@ void loop(){
                 // Special handling for flashlight toggle
                 if (String(actions[i].path) == "flashlight") {
                   // Toggle LED 3: if it's on (not black), turn off; if off, turn white
-                  if (leds[2] == CRGB::Black) {
+                  noInterrupts();  // Prevent race conditions
+                  bool isOff = (leds[2] == CRGB::Black);
+                  if (isOff) {
                     leds[2] = CRGB::White;
                     lastEmote = "flashlight on";
                   } else {
                     leds[2] = CRGB::Black;
                     lastEmote = "flashlight off";
                   }
+                  interrupts();
+                  verifyEyeSync();  // Ensure eyes stay synchronized
                   FastLED.show();
                   #if DEBUG_MODE
                     Serial.print("Flashlight toggled: ");
