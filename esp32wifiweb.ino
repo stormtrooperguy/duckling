@@ -21,6 +21,17 @@
 // Load Wi-Fi library
 #include <WiFi.h>
 
+// *** IMPORTANT: Customize these values for your installation ***
+// Replace these strings to customize for your droid
+String droidname = "YourDroidName";      // Change this! Will be your WiFi SSID
+String droidcolor = "green";             // Button color (CSS color name)
+
+// Access Point credentials
+// SSID will use droidname above
+// *** SECURITY: Change this password before deploying! ***
+// Password must be 8-63 characters
+const char* ap_password = "changeme";    // Change to a secure password!
+
 // Debug Configuration
 #define DEBUG_MODE false  // Set to true to enable verbose serial debugging
 
@@ -67,23 +78,9 @@ CRGB leds[NUM_LEDS];
 #define EYE_BRIGHTNESS 50        // Brightness for LEDs 1 & 2 (eyes) - comfortable viewing
 #define FLASHLIGHT_BRIGHTNESS 255 // Brightness for LED 3 (flashlight) - maximum
 
-// Helper function to scale color brightness for eyes
-CRGB scaleEyeColor(CRGB color) {
-  return CRGB(
-    (color.r * EYE_BRIGHTNESS) / 255,
-    (color.g * EYE_BRIGHTNESS) / 255,
-    (color.b * EYE_BRIGHTNESS) / 255
-  );
-}
-
-// Helper function to scale color brightness for flashlight (full brightness)
-CRGB scaleFlashlightColor(CRGB color) {
-  return CRGB(
-    (color.r * FLASHLIGHT_BRIGHTNESS) / 255,
-    (color.g * FLASHLIGHT_BRIGHTNESS) / 255,
-    (color.b * FLASHLIGHT_BRIGHTNESS) / 255
-  );
-}
+// Forward declarations
+CRGB scaleEyeColor(CRGB color);
+CRGB scaleFlashlightColor(CRGB color);
 
 // Button definition structure (used for Emotes, Actions, and Eye Colors)
 struct Button {
@@ -133,17 +130,6 @@ const Button eyeColors[] = {
   {"color_purple", "purple",       "Purple",  CRGB::Purple,  CRGB::Black,    false,      true,      -1,     -1}
 };
 const int numEyeColors = sizeof(eyeColors) / sizeof(eyeColors[0]);
-
-// *** IMPORTANT: Customize these values for your installation ***
-// Replace these strings to customize for your droid
-String droidname = "YourDroidName";      // Change this! Will be your WiFi SSID
-String droidcolor = "green";             // Button color (CSS color name)
-
-// Access Point credentials
-// SSID will use droidname above
-// *** SECURITY: Change this password before deploying! ***
-// Password must be 8-63 characters
-const char* ap_password = "changeme";  // Change to a secure password!
 
 // Set web server port number to 80
 WiFiServer server(80);
@@ -511,4 +497,22 @@ void loop(){
       Serial.println("");
     #endif
   }
+}
+
+// Helper function to scale color brightness for eyes
+CRGB scaleEyeColor(CRGB color) {
+  return CRGB(
+    (color.r * EYE_BRIGHTNESS) / 255,
+    (color.g * EYE_BRIGHTNESS) / 255,
+    (color.b * EYE_BRIGHTNESS) / 255
+  );
+}
+
+// Helper function to scale color brightness for flashlight (full brightness)
+CRGB scaleFlashlightColor(CRGB color) {
+  return CRGB(
+    (color.r * FLASHLIGHT_BRIGHTNESS) / 255,
+    (color.g * FLASHLIGHT_BRIGHTNESS) / 255,
+    (color.b * FLASHLIGHT_BRIGHTNESS) / 255
+  );
 }
