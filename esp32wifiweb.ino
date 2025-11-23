@@ -63,6 +63,28 @@ bool dfPlayerAvailable = false;     // Track if DFPlayer initialized successfull
 #define COLOR_ORDER GRB
 CRGB leds[NUM_LEDS];
 
+// LED Brightness settings (0-255)
+#define EYE_BRIGHTNESS 50        // Brightness for LEDs 1 & 2 (eyes) - comfortable viewing
+#define FLASHLIGHT_BRIGHTNESS 255 // Brightness for LED 3 (flashlight) - maximum
+
+// Helper function to scale color brightness for eyes
+CRGB scaleEyeColor(CRGB color) {
+  return CRGB(
+    (color.r * EYE_BRIGHTNESS) / 255,
+    (color.g * EYE_BRIGHTNESS) / 255,
+    (color.b * EYE_BRIGHTNESS) / 255
+  );
+}
+
+// Helper function to scale color brightness for flashlight (full brightness)
+CRGB scaleFlashlightColor(CRGB color) {
+  return CRGB(
+    (color.r * FLASHLIGHT_BRIGHTNESS) / 255,
+    (color.g * FLASHLIGHT_BRIGHTNESS) / 255,
+    (color.b * FLASHLIGHT_BRIGHTNESS) / 255
+  );
+}
+
 // Button definition structure (used for Emotes, Actions, and Eye Colors)
 struct Button {
   const char* path;        // URL path (e.g., "sleep")
@@ -77,7 +99,7 @@ struct Button {
 };
 
 // EMOTES: Change eye colors and trigger servo sequences
-// Ordered to match Maestro script programming (0-8)
+// Ordered to match Maestro script programming (0-6)
 const Button emotes[] = {
   // path          label           colorName  LED1&2 color   LED3 color      preserve12  preserve3  script# mp3#
   {"angry",        "angry",        "Red",     CRGB::Red,     CRGB::Black,    false,      false,     0,      -1},
@@ -87,8 +109,9 @@ const Button emotes[] = {
   {"sleep",        "go to sleep",  "Off",     CRGB::Black,   CRGB::Black,    false,      false,     4,      -1},
   {"wake",         "wake up",      "White",   CRGB::White,   CRGB::Black,    false,      false,     5,      -1},
   {"yes",          "yes",          "Green",   CRGB::Green,   CRGB::Black,    false,      false,     6,      -1},
-  {"no",           "no",           "Red",     CRGB::Red,     CRGB::Black,    false,      false,     7,      -1},
-  {"scared",       "scared",       "Purple",  CRGB::Purple,  CRGB::Black,    false,      false,     8,      -1}
+  // TODO: Temporary script assignments until more Maestro sequences are programmed
+  {"no",           "no",           "Red",     CRGB::Red,     CRGB::Black,    false,      false,     0,      -1},  // Temp: using script 0
+  {"scared",       "scared",       "Purple",  CRGB::Purple,  CRGB::Black,    false,      false,     0,      -1}   // Temp: using script 0
 };
 const int numEmotes = sizeof(emotes) / sizeof(emotes[0]);
 
@@ -166,17 +189,17 @@ void setup() {
 
   // Initialize FastLED
   FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS);
-  FastLED.setBrightness(50);  // Set brightness (0-255)
+  // Note: We don't use global brightness - each LED has individual brightness control
   FastLED.clear();
   FastLED.show();
   
   // Set initial eye color to white (wake up state)
-  leds[0] = CRGB::White;  // LED 1 (eye)
-  leds[1] = CRGB::White;  // LED 2 (eye)
-  leds[2] = CRGB::Black;  // LED 3 (flashlight off)
+  leds[0] = scaleEyeColor(CRGB::White);  // LED 1 (eye) - dimmed for comfort
+  leds[1] = scaleEyeColor(CRGB::White);  // LED 2 (eye) - dimmed for comfort
+  leds[2] = CRGB::Black;                  // LED 3 (flashlight off)
   FastLED.show();
   lastEmote = "wake up (startup)";
-  Serial.println("Eyes initialized to white");
+  Serial.println("Eyes initialized to white (brightness 50)");
 
   // Configure Access Point
   Serial.println("Configuring Access Point...");
@@ -266,22 +289,22 @@ void triggerButton(const Button &button) {
     Serial.println(button.colorName);
   #endif
   
-  // Store color in temporary variable to ensure atomicity
-  CRGB eyeColor = button.color;
-  CRGB flashlightColor = button.led3Color;
+  // Store and scale colors with appropriate brightness levels
+  CRGB eyeColor = scaleEyeColor(button.color);           // Eyes at brightness 50
+  CRGB flashlightColor = scaleFlashlightColor(button.led3Color);  // Flashlight at max brightness
   
   // Disable interrupts during LED update to prevent race conditions
   noInterrupts();
   
   // Only update LEDs 1 & 2 if not preserving their state
   if (!button.preserveLED12) {
-    leds[0] = eyeColor;  // LED 1
+    leds[0] = eyeColor;  // LED 1 (dimmed for eye comfort)
     leds[1] = eyeColor;  // LED 2 (always same as LED 1)
   }
   
   // Only update LED 3 if not preserving its state
   if (!button.preserveLED3) {
-    leds[2] = flashlightColor;
+    leds[2] = flashlightColor;  // LED 3 (full brightness for flashlight)
   }
   
   interrupts();  // Re-enable interrupts
@@ -373,11 +396,11 @@ void loop(){
               if (header.indexOf(searchPath) >= 0) {
                 // Special handling for flashlight toggle
                 if (String(actions[i].path) == "flashlight") {
-                  // Toggle LED 3: if it's on (not black), turn off; if off, turn white
+                  // Toggle LED 3: if it's on (not black), turn off; if off, turn white at max brightness
                   noInterrupts();  // Prevent race conditions
                   bool isOff = (leds[2] == CRGB::Black);
                   if (isOff) {
-                    leds[2] = CRGB::White;
+                    leds[2] = scaleFlashlightColor(CRGB::White);  // Full brightness (255)
                     lastEmote = "flashlight on";
                   } else {
                     leds[2] = CRGB::Black;

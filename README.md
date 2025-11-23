@@ -6,7 +6,7 @@ A web-based control system for animatronic droids using ESP32, featuring LED eye
 
 - **WiFi Access Point**: ESP32 creates its own WiFi network for direct device control
 - **Web Interface**: Responsive landscape-optimized interface for 8" tablets with fast response times
-- **LED Eye Control**: 3 addressable LEDs (WS2812B/NeoPixel) for expressive eyes
+- **LED Eye Control**: 3 addressable LEDs (WS2812B/NeoPixel) with per-LED brightness (eyes dimmed for comfort, flashlight at max)
 - **Servo Control**: Optional integration with Pololu Maestro for complex servo sequences
 - **Sound Effects**: Optional DFPlayer Mini for MP3 audio playback
 - **Modular Design**: Run with any combination of components (LEDs only, LEDs + Servos, full system)
@@ -196,10 +196,20 @@ dfPlayer.volume(20);  // Default: 20
 
 ### FastLED Brightness
 
-Adjust brightness (0-255) in `setup()`:
+The system uses **per-LED brightness control** for optimal viewing:
+
+- **Eyes (LEDs 1 & 2)**: Brightness **50** (comfortable for viewing)
+- **Flashlight (LED 3)**: Brightness **255** (maximum brightness)
+
+To adjust these values, modify the constants at the top of the sketch:
 ```cpp
-FastLED.setBrightness(50);  // Default: 50
+#define EYE_BRIGHTNESS 50        // Brightness for eyes (0-255)
+#define FLASHLIGHT_BRIGHTNESS 255 // Brightness for flashlight (0-255)
 ```
+
+The brightness is applied automatically through scaling functions:
+- `scaleEyeColor()` - Dims eye colors to comfortable levels
+- `scaleFlashlightColor()` - Keeps flashlight at maximum brightness
 
 ## Usage
 
@@ -233,8 +243,10 @@ Emotes change eye colors and trigger servo sequences:
 | **go to sleep** | Off | 4 | All LEDs off |
 | **wake up** | White | 5 | Eyes turn white |
 | **yes** | Green | 6 | Affirmative response |
-| **no** | Red | 7 | Negative response |
-| **scared** | Purple | 8 | Scared expression |
+| **no** | Red | 0* | Negative response |
+| **scared** | Purple | 0* | Scared expression |
+
+**Note**: *Emotes marked with * are temporarily using script 0 until additional Maestro sequences are programmed.
 
 ### Available Actions
 
@@ -374,16 +386,14 @@ SD Card Root
 
 Each emote can trigger a Maestro script. Program your servo sequences in Maestro Control Center:
 
-- Script 0: Sleep position
-- Script 1: Wake animation
+- Script 0: Angry movement (also temporarily used by 'no' and 'scared')
+- Script 1: Curious movement
 - Script 2: Happy movement
-- Script 3: Curious movement
-- Script 4: Angry movement
-- Script 5: Sad movement
-- Script 6: Idle animation
-- Script 7-10: Directional looks
-- Script 11: Scared movement
-- Script 12+: Your custom scripts
+- Script 3: Sad movement
+- Script 4: Sleep position
+- Script 5: Wake animation
+- Script 6: Yes/affirmative movement
+- Script 7+: Available for additional custom emotes (program 'no' and 'scared' here when ready)
 
 ## Web Interface
 
@@ -609,9 +619,12 @@ This system is designed to run from an **18V battery** with buck converters:
 
 **5V Rail (from first buck converter):**
 - **ESP32**: ~500mA (WiFi active)
-- **LED Strip**: ~60mA per LED at full brightness (3 LEDs = 180mA max)
+- **LED Strip**: 
+  - Eyes (2 LEDs at brightness 50): ~24mA
+  - Flashlight (1 LED at max brightness 255): ~60mA
+  - **Total LEDs**: ~84mA typical
 - **DFPlayer**: ~50mA
-- **Total 5V**: ~750mA (recommend 2A+ converter for headroom)
+- **Total 5V**: ~650mA typical (recommend 2A+ converter for headroom)
 
 **8V Rail (from second buck converter):**
 - **Servos**: Varies by servo type and quantity
@@ -674,4 +687,5 @@ For issues or questions:
   - 1 utility action (flashlight toggle)
   - 6 eye color options (quick color changes without servo movements)
   - Automatic white eye startup
+  - Per-LED brightness control (eyes at 50 for comfort, flashlight at 255 for maximum brightness)
 
