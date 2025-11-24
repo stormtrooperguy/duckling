@@ -23,14 +23,14 @@
 
 // *** IMPORTANT: Customize these values for your installation ***
 // Replace these strings to customize for your droid
-String droidname = "YourDroidName";      // Change this! Will be your WiFi SSID
+String droidname = "Grek";      // Change this! Will be your WiFi SSID
 String droidcolor = "green";             // Button color (CSS color name)
 
 // Access Point credentials
 // SSID will use droidname above
 // *** SECURITY: Change this password before deploying! ***
 // Password must be 8-63 characters
-const char* ap_password = "changeme";    // Change to a secure password!
+const char* ap_password = "makeway4";    // Change to a secure password!
 
 // Debug Configuration
 #define DEBUG_MODE false  // Set to true to enable verbose serial debugging
@@ -102,13 +102,12 @@ const Button emotes[] = {
   {"angry",        "angry",        "Red",     CRGB::Red,     CRGB::Black,    false,      false,     0,      -1},
   {"curious",      "curious",      "Yellow",  CRGB::Yellow,  CRGB::Black,    false,      false,     1,      -1},
   {"happy",        "happy",        "Green",   CRGB::Green,   CRGB::Black,    false,      false,     2,      -1},
-  {"sad",          "sad",          "Blue",    CRGB::Blue,    CRGB::Black,    false,      false,     3,      -1},
-  {"sleep",        "go to sleep",  "Off",     CRGB::Black,   CRGB::Black,    false,      false,     4,      -1},
-  {"wake",         "wake up",      "White",   CRGB::White,   CRGB::Black,    false,      false,     5,      -1},
-  {"yes",          "yes",          "Green",   CRGB::Green,   CRGB::Black,    false,      false,     6,      -1},
-  // TODO: Temporary script assignments until more Maestro sequences are programmed
-  {"no",           "no",           "Red",     CRGB::Red,     CRGB::Black,    false,      false,     0,      -1},  // Temp: using script 0
-  {"scared",       "scared",       "Purple",  CRGB::Purple,  CRGB::Black,    false,      false,     0,      -1}   // Temp: using script 0
+  {"no",           "no",           "Red",     CRGB::DarkOrange,  CRGB::Black,    false,      false,     3,      -1},  
+  {"sad",          "sad",          "Blue",    CRGB::Blue,    CRGB::Black,    false,      false,     4,      -1},
+  {"scared",       "scared",       "Purple",  CRGB::Purple,  CRGB::Black,    false,      false,     5,      -1},
+  {"sleep",        "go to sleep",  "Off",     CRGB::Black,   CRGB::Black,    false,      false,     6,      -1},
+  {"wake",         "wake up",      "White",   CRGB::White,   CRGB::Black,    false,      false,     7,      -1},
+  {"yes",          "yes",          "Green",   CRGB::Green,   CRGB::Black,    false,      false,     8,      -1}
 };
 const int numEmotes = sizeof(emotes) / sizeof(emotes[0]);
 
