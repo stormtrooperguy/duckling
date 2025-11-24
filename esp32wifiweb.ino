@@ -23,14 +23,14 @@
 
 // *** IMPORTANT: Customize these values for your installation ***
 // Replace these strings to customize for your droid
-String droidname = "Grek";      // Change this! Will be your WiFi SSID
+String droidname = "YourDroidName";      // Change this! Will be your WiFi SSID
 String droidcolor = "green";             // Button color (CSS color name)
 
 // Access Point credentials
 // SSID will use droidname above
 // *** SECURITY: Change this password before deploying! ***
 // Password must be 8-63 characters
-const char* ap_password = "makeway4";    // Change to a secure password!
+const char* ap_password = "changeme";    // Change to a secure password!
 
 // Debug Configuration
 #define DEBUG_MODE false  // Set to true to enable verbose serial debugging
