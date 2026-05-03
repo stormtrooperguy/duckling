@@ -698,6 +698,13 @@ For issues or questions:
 
 ## Version History
 
+- **v1.3**: AJAX web interface — no more page reloads
+  - Button clicks now use `fetch()` instead of full page navigation. Bandwidth per click dropped from ~5 KB to ~80 bytes
+  - New endpoints: `GET /` returns the page (sent once on initial load); `GET /status` returns JSON system state; `GET /maestro/<x>` triggers an action and returns the updated JSON status in the same response
+  - Status console now updates live: a 2-second poll keeps it in sync without user interaction. Idle mode state, last emote, and component status visible in real time
+  - Added "Idle: On/Off" indicator to status console
+  - Page is no longer regenerated and re-sent on every interaction; the tablet only renders the DOM once
+
 - **v1.2**: Efficiency pass for long-running stability
   - Maestro `getScriptStatus()` polling rate-limited to every 150 ms (was every loop iteration, flooding the serial bus)
   - Replaced `String header` with a fixed `char[]` buffer; replaced `String currentLine` with a length counter — eliminates heap fragmentation from char-by-char request reads

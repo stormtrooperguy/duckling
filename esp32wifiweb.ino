@@ -86,7 +86,11 @@ CRGB leds[NUM_LEDS];
 CRGB scaleEyeColor(CRGB color);
 CRGB scaleFlashlightColor(CRGB color);
 void shuffleIdleOrder();
-bool parseRequestPath(const char* buffer, char* outPath, int maxLen);
+bool parseRequestUrl(const char* buffer, char* outUrl, int maxLen);
+void sendStatusJSON(WiFiClient &client);
+void sendPageHTML(WiFiClient &client);
+void sendNotFound(WiFiClient &client);
+void dispatchMaestroAction(const char* path);
 
 // Button definition structure (used for Emotes, Actions, and Eye Colors)
 struct Button {
@@ -240,32 +244,31 @@ void setup() {
   server.begin();
 }
 
-// Helper function to generate status HTML for web display
-String getStatusHTML() {
-  String status = "<div class=\"status-console\">";
-  status += "<h3>System Status</h3>";
-  status += "<div class=\"status-grid\">";
-  
-  // Network info
-  status += "<div class=\"status-item\"><strong>Network:</strong> " + droidname + " (192.168.4.1)</div>";
-  
-  // Component status
-  status += "<div class=\"status-item\"><strong>Maestro:</strong> ";
-  status += maestroAvailable ? "Connected" : "Disabled";
-  status += "</div>";
-  
-  status += "<div class=\"status-item\"><strong>DFPlayer:</strong> ";
-  status += dfPlayerAvailable ? "Connected" : "Not Available";
-  status += "</div>";
-  
-  // System status
-  status += "<div class=\"status-item\"><strong>Status:</strong> " + systemStatus + "</div>";
-  
-  // Last emote
-  status += "<div class=\"status-item\"><strong>Last Emote:</strong> " + lastEmote + "</div>";
-  
-  status += "</div></div>";
-  return status;
+// Sends current system state as JSON. Used by /status polling and /maestro/<x> response.
+void sendStatusJSON(WiFiClient &client) {
+  client.println("HTTP/1.1 200 OK");
+  client.println("Content-type:application/json");
+  client.println("Connection: close");
+  client.println();
+  client.print("{\"lastEmote\":\"");
+  client.print(lastEmote);
+  client.print("\",\"idle\":");
+  client.print(idleMode ? "true" : "false");
+  client.print(",\"maestro\":");
+  client.print(maestroAvailable ? "true" : "false");
+  client.print(",\"dfplayer\":");
+  client.print(dfPlayerAvailable ? "true" : "false");
+  client.print(",\"status\":\"");
+  client.print(systemStatus);
+  client.println("\"}");
+}
+
+void sendNotFound(WiFiClient &client) {
+  client.println("HTTP/1.1 404 Not Found");
+  client.println("Content-type:text/plain");
+  client.println("Connection: close");
+  client.println();
+  client.println("Not Found");
 }
 
 // Safety function to ensure eyes (LEDs 1 & 2) are always synchronized
@@ -365,30 +368,28 @@ void triggerButton(const Button &button, bool fromIdle = false) {
   }
 }
 
-// Helper function to generate emote button HTML (no heap allocation)
+// Helper function to render a button. Click fires JS that hits /maestro/<path>.
 void createButton(WiFiClient &client, const Button &button) {
-  client.print("<a href=\"/maestro/");
+  client.print("<button onclick=\"t('");
   client.print(button.path);
-  client.print("\" class=\"button\">");
+  client.print("')\" class=\"button\">");
   client.print(button.label);
-  client.println("</a>");
+  client.println("</button>");
 }
 
-// Extracts the path after "GET /maestro/" into outPath. Returns true if found.
-// Stops at space, '?', '\r', or '\n'. outPath is always null-terminated.
-bool parseRequestPath(const char* buffer, char* outPath, int maxLen) {
-  const char* prefix = "GET /maestro/";
-  const char* found = strstr(buffer, prefix);
-  if (!found) {
-    outPath[0] = '\0';
+// Extracts the URL after "GET " into outUrl (e.g., "/", "/status", "/maestro/angry").
+// Stops at space or '?'. outUrl is always null-terminated. Returns true on success.
+bool parseRequestUrl(const char* buffer, char* outUrl, int maxLen) {
+  if (strncmp(buffer, "GET ", 4) != 0) {
+    outUrl[0] = '\0';
     return false;
   }
-  found += 13;  // strlen("GET /maestro/")
+  const char* p = buffer + 4;
   int i = 0;
-  while (i < maxLen - 1 && *found && *found != ' ' && *found != '?' && *found != '\r' && *found != '\n') {
-    outPath[i++] = *found++;
+  while (i < maxLen - 1 && *p && *p != ' ' && *p != '?' && *p != '\r' && *p != '\n') {
+    outUrl[i++] = *p++;
   }
-  outPath[i] = '\0';
+  outUrl[i] = '\0';
   return i > 0;
 }
 
@@ -402,6 +403,156 @@ void shuffleIdleOrder() {
     idleShuffleOrder[i] = idleShuffleOrder[j];
     idleShuffleOrder[j] = tmp;
   }
+}
+
+// Runs the action identified by the path component after "/maestro/".
+void dispatchMaestroAction(const char* path) {
+  if (strcmp(path, "flashlight") == 0) {
+    noInterrupts();
+    bool isOff = (leds[2] == CRGB::Black);
+    if (isOff) {
+      leds[2] = scaleFlashlightColor(CRGB::White);
+      lastEmote = "flashlight on";
+    } else {
+      leds[2] = CRGB::Black;
+      lastEmote = "flashlight off";
+    }
+    interrupts();
+    verifyEyeSync();
+    FastLED.show();
+    #if DEBUG_MODE
+      Serial.print("Flashlight toggled: ");
+      Serial.println(lastEmote);
+    #endif
+    return;
+  }
+  if (strcmp(path, "idle_start") == 0) {
+    shuffleIdleOrder();
+    idleShuffleIndex = 0;
+    idleSequenceRunning = false;
+    idleNextEmoteTime = millis() + random(IDLE_MIN_DELAY_MS, IDLE_MAX_DELAY_MS);
+    idleMode = true;
+    lastEmote = "idle mode on";
+    #if DEBUG_MODE
+      Serial.println("Idle mode started");
+    #endif
+    return;
+  }
+  if (strcmp(path, "idle_stop") == 0) {
+    idleMode = false;
+    idleSequenceRunning = false;
+    lastEmote = "idle mode off";
+    #if DEBUG_MODE
+      Serial.println("Idle mode stopped");
+    #endif
+    return;
+  }
+  for (int i = 0; i < numEmotes; i++) {
+    if (strcmp(path, emotes[i].path) == 0) {
+      triggerButton(emotes[i]);
+      return;
+    }
+  }
+  for (int i = 0; i < numActions; i++) {
+    if (strcmp(path, actions[i].path) == 0) {
+      triggerButton(actions[i]);
+      return;
+    }
+  }
+  for (int i = 0; i < numEyeColors; i++) {
+    if (strcmp(path, eyeColors[i].path) == 0) {
+      triggerButton(eyeColors[i]);
+      return;
+    }
+  }
+}
+
+// Renders the full control page. Sent once on initial load (GET /).
+// All button clicks and status updates happen via embedded JS without page reload.
+void sendPageHTML(WiFiClient &client) {
+  client.println("HTTP/1.1 200 OK");
+  client.println("Content-type:text/html");
+  client.println("Connection: close");
+  client.println();
+
+  client.print(
+    "<!DOCTYPE html><html>"
+    "<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+    "<link rel=\"icon\" href=\"data:,\">"
+    "<style>"
+    "* { margin: 0; padding: 0; box-sizing: border-box; }"
+    "html { font-family: Helvetica, Arial, sans-serif; }"
+    "body { background-color: #1a1a1a; color: #ffffff; padding: 11px; padding-bottom: 78px; }"
+    "h1 { text-align: center; margin-bottom: 15px; font-size: 24px; }"
+    "h2 { text-align: center; margin: 15px 0 8px 0; font-size: 17px; color: #aaa; }"
+    ".button-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: 8px; max-width: 1200px; margin: 0 auto 15px auto; }"
+    ".button { background-color: "
+  );
+  client.print(droidcolor);
+  client.print(
+    "; border: none; border-radius: 6px; color: white; padding: 15px 11px;"
+    "font-family: inherit; font-size: 15px; font-weight: bold; cursor: pointer;"
+    "transition: all 0.3s; text-align: center; box-shadow: 0 3px 5px rgba(0,0,0,0.3); }"
+    ".button:hover { transform: translateY(-2px); box-shadow: 0 5px 9px rgba(0,0,0,0.4); opacity: 0.9; }"
+    ".button:active { transform: translateY(0); box-shadow: 0 2px 3px rgba(0,0,0,0.3); }"
+    ".status-console { position: fixed; bottom: 0; left: 0; right: 0; background-color: #2a2a2a; "
+    "border-top: 2px solid #444; padding: 8px 11px; box-shadow: 0 -2px 8px rgba(0,0,0,0.5); }"
+    ".status-console h3 { margin: 0 0 6px 0; font-size: 11px; color: #888; text-align: center; }"
+    ".status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: 6px; "
+    "max-width: 1200px; margin: 0 auto; font-size: 9px; }"
+    ".status-item { background-color: #1a1a1a; padding: 5px 8px; border-radius: 3px; border: 1px solid #444; }"
+    ".status-item strong { color: #aaa; margin-right: 5px; }"
+    "</style></head>"
+    "<body><h1>BDX Control System ("
+  );
+  client.print(droidname);
+  client.print(")</h1>");
+
+  client.println("<h2>Emotes</h2><div class=\"button-grid\">");
+  for (int i = 0; i < numEmotes; i++) createButton(client, emotes[i]);
+  client.println("</div>");
+
+  client.println("<h2>Actions</h2><div class=\"button-grid\">");
+  for (int i = 0; i < numActions; i++) createButton(client, actions[i]);
+  client.println("</div>");
+
+  client.println("<h2>Eye Colors</h2><div class=\"button-grid\">");
+  for (int i = 0; i < numEyeColors; i++) createButton(client, eyeColors[i]);
+  client.println("</div>");
+
+  // Status console: static structure, values populated by JS polling
+  client.print(
+    "<div class=\"status-console\"><h3>System Status</h3><div class=\"status-grid\">"
+    "<div class=\"status-item\"><strong>Network:</strong> "
+  );
+  client.print(droidname);
+  client.print(
+    " (192.168.4.1)</div>"
+    "<div class=\"status-item\"><strong>Maestro:</strong> <span id=\"ms\">&mdash;</span></div>"
+    "<div class=\"status-item\"><strong>DFPlayer:</strong> <span id=\"ds\">&mdash;</span></div>"
+    "<div class=\"status-item\"><strong>Idle:</strong> <span id=\"im\">&mdash;</span></div>"
+    "<div class=\"status-item\"><strong>Status:</strong> <span id=\"ss\">&mdash;</span></div>"
+    "<div class=\"status-item\"><strong>Last:</strong> <span id=\"le\">&mdash;</span></div>"
+    "</div></div>"
+  );
+
+  // Embedded JS: AJAX click handler + 2s status polling
+  client.print(
+    "<script>"
+    "function r(d){if(!d)return;"
+    "document.getElementById('le').textContent=d.lastEmote;"
+    "document.getElementById('im').textContent=d.idle?'On':'Off';"
+    "document.getElementById('ms').textContent=d.maestro?'Connected':'Disabled';"
+    "document.getElementById('ds').textContent=d.dfplayer?'Connected':'Not Available';"
+    "document.getElementById('ss').textContent=d.status;}"
+    "async function t(p){try{const x=await fetch('/maestro/'+p);r(await x.json());}catch(e){}}"
+    "async function q(){try{const x=await fetch('/status');r(await x.json());}catch(e){}}"
+    "setInterval(q,2000);q();"
+    "</script>"
+  );
+
+  client.println("</body></html>");
+  client.println();
 }
 
 void loop(){
@@ -465,139 +616,22 @@ void loop(){
           // if the current line is blank, you got two newline characters in a row.
           // that's the end of the client HTTP request, so send a response:
           if (currentLineLen == 0) {
-            // HTTP headers always start with a response code (e.g. HTTP/1.1 200 OK)
-            // and a content-type so the client knows what's coming, then a blank line:
-            client.println("HTTP/1.1 200 OK");
-            client.println("Content-type:text/html");
-            client.println("Connection: close");
-            client.println();
-
-            // Parse the request path once, then dispatch with strcmp
-            char requestPath[MAX_PATH_SIZE];
-            if (parseRequestPath(header, requestPath, MAX_PATH_SIZE)) {
-              // Special-case actions handled inline (don't go through triggerButton)
-              if (strcmp(requestPath, "flashlight") == 0) {
-                noInterrupts();
-                bool isOff = (leds[2] == CRGB::Black);
-                if (isOff) {
-                  leds[2] = scaleFlashlightColor(CRGB::White);
-                  lastEmote = "flashlight on";
-                } else {
-                  leds[2] = CRGB::Black;
-                  lastEmote = "flashlight off";
-                }
-                interrupts();
-                verifyEyeSync();
-                FastLED.show();
-                #if DEBUG_MODE
-                  Serial.print("Flashlight toggled: ");
-                  Serial.println(lastEmote);
-                #endif
-              } else if (strcmp(requestPath, "idle_start") == 0) {
-                shuffleIdleOrder();
-                idleShuffleIndex = 0;
-                idleSequenceRunning = false;
-                idleNextEmoteTime = millis() + random(IDLE_MIN_DELAY_MS, IDLE_MAX_DELAY_MS);
-                idleMode = true;
-                lastEmote = "idle mode on";
-                #if DEBUG_MODE
-                  Serial.println("Idle mode started");
-                #endif
-              } else if (strcmp(requestPath, "idle_stop") == 0) {
-                idleMode = false;
-                idleSequenceRunning = false;
-                lastEmote = "idle mode off";
-                #if DEBUG_MODE
-                  Serial.println("Idle mode stopped");
-                #endif
+            // End of HTTP request — parse URL and dispatch
+            char url[MAX_PATH_SIZE];
+            if (parseRequestUrl(header, url, MAX_PATH_SIZE)) {
+              if (strncmp(url, "/maestro/", 9) == 0) {
+                dispatchMaestroAction(url + 9);
+                sendStatusJSON(client);
+              } else if (strcmp(url, "/status") == 0) {
+                sendStatusJSON(client);
+              } else if (strcmp(url, "/") == 0) {
+                sendPageHTML(client);
               } else {
-                // Lookup in emotes, then actions, then eye colors
-                bool matched = false;
-                for (int i = 0; i < numEmotes && !matched; i++) {
-                  if (strcmp(requestPath, emotes[i].path) == 0) {
-                    triggerButton(emotes[i]);
-                    matched = true;
-                  }
-                }
-                for (int i = 0; i < numActions && !matched; i++) {
-                  if (strcmp(requestPath, actions[i].path) == 0) {
-                    triggerButton(actions[i]);
-                    matched = true;
-                  }
-                }
-                for (int i = 0; i < numEyeColors && !matched; i++) {
-                  if (strcmp(requestPath, eyeColors[i].path) == 0) {
-                    triggerButton(eyeColors[i]);
-                    matched = true;
-                  }
-                }
+                sendNotFound(client);
               }
+            } else {
+              sendNotFound(client);
             }
-            
-            // Display the HTML web page (optimized with larger chunks)
-            client.print(
-              "<!DOCTYPE html><html>"
-              "<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
-              "<link rel=\"icon\" href=\"data:,\">"
-              "<style>"
-              "* { margin: 0; padding: 0; box-sizing: border-box; }"
-              "html { font-family: Helvetica, Arial, sans-serif; }"
-              "body { background-color: #1a1a1a; color: #ffffff; padding: 11px; }"
-              "h1 { text-align: center; margin-bottom: 15px; font-size: 24px; }"
-              "h2 { text-align: center; margin: 15px 0 8px 0; font-size: 17px; color: #aaa; }"
-              ".button-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: 8px; max-width: 1200px; margin: 0 auto 15px auto; }"
-              ".button { background-color: "
-            );
-            client.print(droidcolor);
-            client.print(
-              "; border: none; border-radius: 6px; color: white; padding: 15px 11px;"
-              "text-decoration: none; font-size: 15px; font-weight: bold; cursor: pointer;"
-              "transition: all 0.3s; display: block; text-align: center; box-shadow: 0 3px 5px rgba(0,0,0,0.3); }"
-              ".button:hover { transform: translateY(-2px); box-shadow: 0 5px 9px rgba(0,0,0,0.4); opacity: 0.9; }"
-              ".button:active { transform: translateY(0); box-shadow: 0 2px 3px rgba(0,0,0,0.3); }"
-              ".status-console { position: fixed; bottom: 0; left: 0; right: 0; background-color: #2a2a2a; "
-              "border-top: 2px solid #444; padding: 8px 11px; box-shadow: 0 -2px 8px rgba(0,0,0,0.5); }"
-              ".status-console h3 { margin: 0 0 6px 0; font-size: 11px; color: #888; text-align: center; }"
-              ".status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: 6px; "
-              "max-width: 1200px; margin: 0 auto; font-size: 9px; }"
-              ".status-item { background-color: #1a1a1a; padding: 5px 8px; border-radius: 3px; border: 1px solid #444; }"
-              ".status-item strong { color: #aaa; margin-right: 5px; }"
-              "body { padding-bottom: 68px; }"
-              "</style></head>"
-              "<body><h1>BDX Control System ("
-            );
-            client.print(droidname);
-            client.print(")</h1>");
-            
-            // Emotes section
-            client.println("<h2>Emotes</h2><div class=\"button-grid\">");
-            for (int i = 0; i < numEmotes; i++) {
-              createButton(client, emotes[i]);
-            }
-            client.println("</div>");
-            
-            // Actions section
-            client.println("<h2>Actions</h2><div class=\"button-grid\">");
-            for (int i = 0; i < numActions; i++) {
-              createButton(client, actions[i]);
-            }
-            client.println("</div>");
-            
-            // Eye Colors section
-            client.println("<h2>Eye Colors</h2><div class=\"button-grid\">");
-            for (int i = 0; i < numEyeColors; i++) {
-              createButton(client, eyeColors[i]);
-            }
-            client.println("</div>");
-            
-            // Add status console
-            client.print(getStatusHTML());
-            
-            client.println("</body></html>");
-            
-            // The HTTP response ends with another blank line
-            client.println();
-            // Break out of the while loop
             break;
           } else { // if you got a newline, then reset the line counter
             currentLineLen = 0;
