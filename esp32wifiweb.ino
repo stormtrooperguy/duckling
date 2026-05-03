@@ -78,9 +78,14 @@ CRGB leds[NUM_LEDS];
 #define EYE_BRIGHTNESS 50        // Brightness for LEDs 1 & 2 (eyes) - comfortable viewing
 #define FLASHLIGHT_BRIGHTNESS 255 // Brightness for LED 3 (flashlight) - maximum
 
+// Idle mode timing
+#define IDLE_MIN_DELAY_MS 6000   // Minimum ms from emote trigger to next emote
+#define IDLE_MAX_DELAY_MS 15000  // Maximum ms from emote trigger to next emote
+
 // Forward declarations
 CRGB scaleEyeColor(CRGB color);
 CRGB scaleFlashlightColor(CRGB color);
+void shuffleIdleOrder();
 
 // Button definition structure (used for Emotes, Actions, and Eye Colors)
 struct Button {
@@ -114,7 +119,9 @@ const int numEmotes = sizeof(emotes) / sizeof(emotes[0]);
 // ACTIONS: Utility functions that don't change eye colors
 const Button actions[] = {
   // path          label           colorName  LED1&2 color   LED3 color      preserve12  preserve3  script# mp3#
-  {"flashlight",  "flashlight",  "Flashlight Toggle",  CRGB::Black, CRGB::White, true, false, -1,     -1}
+  {"flashlight",  "flashlight",  "Flashlight Toggle",  CRGB::Black, CRGB::White, true,  false, -1, -1},
+  {"idle_start",  "idle on",     "Idle Mode On",       CRGB::Black, CRGB::Black, true,  true,  -1, -1},
+  {"idle_stop",   "idle off",    "Idle Mode Off",      CRGB::Black, CRGB::Black, true,  true,  -1, -1}
 };
 const int numActions = sizeof(actions) / sizeof(actions[0]);
 
@@ -140,6 +147,17 @@ String header;
 // Status tracking for web display
 String lastEmote = "None";
 String systemStatus = "Initializing...";
+
+// Eye color restore after emote sequences
+CRGB preEmoteColor = CRGB::Black;
+bool pendingColorRestore = false;
+
+// Idle mode state
+bool idleMode = false;
+bool idleSequenceRunning = false;
+unsigned long idleNextEmoteTime = 0;
+int idleShuffleOrder[16];  // Max emote count
+int idleShuffleIndex = 0;
 
 // Current time
 unsigned long currentTime = millis();
@@ -178,13 +196,13 @@ void setup() {
   FastLED.clear();
   FastLED.show();
   
-  // Set initial eye color to white (wake up state)
-  leds[0] = scaleEyeColor(CRGB::White);  // LED 1 (eye) - dimmed for comfort
-  leds[1] = scaleEyeColor(CRGB::White);  // LED 2 (eye) - dimmed for comfort
-  leds[2] = CRGB::Black;                  // LED 3 (flashlight off)
+  // Set initial eye color to yellow (startup state)
+  leds[0] = scaleEyeColor(CRGB::Yellow);  // LED 1 (eye) - dimmed for comfort
+  leds[1] = scaleEyeColor(CRGB::Yellow);  // LED 2 (eye) - dimmed for comfort
+  leds[2] = CRGB::Black;                   // LED 3 (flashlight off)
   FastLED.show();
-  lastEmote = "wake up (startup)";
-  Serial.println("Eyes initialized to white (brightness 50)");
+  lastEmote = "yellow (startup)";
+  Serial.println("Eyes initialized to yellow (brightness 50)");
 
   // Configure Access Point
   Serial.println("Configuring Access Point...");
@@ -263,7 +281,13 @@ void verifyEyeSync() {
 }
 
 // Helper function to trigger button action (emote or action)
-void triggerButton(const Button &button) {
+void triggerButton(const Button &button, bool fromIdle = false) {
+  // Any user-initiated trigger cancels idle mode
+  if (!fromIdle) {
+    idleMode = false;
+    idleSequenceRunning = false;
+  }
+
   // Track last action for status display
   lastEmote = String(button.label);
   
@@ -283,6 +307,14 @@ void triggerButton(const Button &button) {
   
   // Only update LEDs 1 & 2 if not preserving their state
   if (!button.preserveLED12) {
+    if (button.scriptNumber >= 0 && maestroAvailable) {
+      // Emote with servo sequence: save current color to restore after sequence ends
+      preEmoteColor = leds[0];
+      pendingColorRestore = true;
+    } else {
+      // Explicit eye color change: cancel any pending restore
+      pendingColorRestore = false;
+    }
     leds[0] = eyeColor;  // LED 1 (dimmed for eye comfort)
     leds[1] = eyeColor;  // LED 2 (always same as LED 1)
   }
@@ -335,7 +367,53 @@ void createButton(WiFiClient &client, const Button &button) {
   client.println(btn);
 }
 
+void shuffleIdleOrder() {
+  for (int i = 0; i < numEmotes; i++) {
+    idleShuffleOrder[i] = i;
+  }
+  for (int i = numEmotes - 1; i > 0; i--) {
+    int j = random(0, i + 1);
+    int tmp = idleShuffleOrder[i];
+    idleShuffleOrder[i] = idleShuffleOrder[j];
+    idleShuffleOrder[j] = tmp;
+  }
+}
+
 void loop(){
+  // Restore eye color once the emote servo sequence finishes
+  if (pendingColorRestore && maestroAvailable) {
+    if (maestro.getScriptStatus() == 1) {  // 1 = script stopped
+      noInterrupts();
+      leds[0] = preEmoteColor;
+      leds[1] = preEmoteColor;
+      interrupts();
+      FastLED.show();
+      pendingColorRestore = false;
+      if (idleMode) {
+        idleSequenceRunning = false;
+        idleNextEmoteTime = millis() + random(IDLE_MIN_DELAY_MS, IDLE_MAX_DELAY_MS);
+      }
+    }
+  }
+
+  // Fire the next idle emote when the timer expires and no sequence is running
+  if (idleMode && !idleSequenceRunning && millis() >= idleNextEmoteTime) {
+    int idx = idleShuffleOrder[idleShuffleIndex];
+    triggerButton(emotes[idx], true);
+    idleSequenceRunning = true;
+    idleShuffleIndex++;
+    if (idleShuffleIndex >= numEmotes) {
+      shuffleIdleOrder();
+      idleShuffleIndex = 0;
+    }
+    // If Maestro is unavailable, pendingColorRestore won't be set so we won't
+    // get the normal callback — schedule the next emote from here instead
+    if (!maestroAvailable) {
+      idleSequenceRunning = false;
+      idleNextEmoteTime = millis() + random(IDLE_MIN_DELAY_MS, IDLE_MAX_DELAY_MS);
+    }
+  }
+
   WiFiClient client = server.accept();   // Listen for incoming clients
 
   if (client) {                             // If a new client connects,
@@ -379,24 +457,39 @@ void loop(){
             for (int i = 0; i < numActions; i++) {
               String searchPath = String("GET /maestro/") + actions[i].path;
               if (header.indexOf(searchPath) >= 0) {
-                // Special handling for flashlight toggle
                 if (String(actions[i].path) == "flashlight") {
-                  // Toggle LED 3: if it's on (not black), turn off; if off, turn white at max brightness
-                  noInterrupts();  // Prevent race conditions
+                  noInterrupts();
                   bool isOff = (leds[2] == CRGB::Black);
                   if (isOff) {
-                    leds[2] = scaleFlashlightColor(CRGB::White);  // Full brightness (255)
+                    leds[2] = scaleFlashlightColor(CRGB::White);
                     lastEmote = "flashlight on";
                   } else {
                     leds[2] = CRGB::Black;
                     lastEmote = "flashlight off";
                   }
                   interrupts();
-                  verifyEyeSync();  // Ensure eyes stay synchronized
+                  verifyEyeSync();
                   FastLED.show();
                   #if DEBUG_MODE
                     Serial.print("Flashlight toggled: ");
                     Serial.println(lastEmote);
+                  #endif
+                } else if (String(actions[i].path) == "idle_start") {
+                  shuffleIdleOrder();
+                  idleShuffleIndex = 0;
+                  idleSequenceRunning = false;
+                  idleNextEmoteTime = millis() + random(IDLE_MIN_DELAY_MS, IDLE_MAX_DELAY_MS);
+                  idleMode = true;
+                  lastEmote = "idle mode on";
+                  #if DEBUG_MODE
+                    Serial.println("Idle mode started");
+                  #endif
+                } else if (String(actions[i].path) == "idle_stop") {
+                  idleMode = false;
+                  idleSequenceRunning = false;
+                  lastEmote = "idle mode off";
+                  #if DEBUG_MODE
+                    Serial.println("Idle mode stopped");
                   #endif
                 } else {
                   triggerButton(actions[i]);

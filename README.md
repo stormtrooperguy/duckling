@@ -11,7 +11,9 @@ A web-based control system for animatronic droids using ESP32, featuring LED eye
 - **Sound Effects**: Optional DFPlayer Mini for MP3 audio playback
 - **Modular Design**: Run with any combination of components (LEDs only, LEDs + Servos, full system)
 - **Emotes System**: Pre-configured emotional states with coordinated eye colors and servo movements
-- **Actions System**: Utility functions (like flashlight toggle) that preserve eye state
+- **Eye Color Restore**: After each emote sequence finishes, eyes automatically return to the color they were before the emote
+- **Idle Mode**: Autonomous mode that cycles through emotes in random order with natural timing delays, making the droid look active when not being puppeteered
+- **Actions System**: Utility functions (like flashlight toggle and idle mode) that preserve eye state
 - **Eye Colors System**: Quick eye color changes without servo movements (6 colors available)
 - **Performance Optimized**: Fast HTTP response (~200-400ms) with optional debug mode for development
 
@@ -218,7 +220,7 @@ The brightness is applied automatically through scaling functions:
 1. Upload the sketch to ESP32
 2. Open Serial Monitor (115200 baud) to see connection details
 3. ESP32 will create a WiFi access point
-4. **Eyes automatically turn white on startup** (wake up state)
+4. **Eyes automatically turn yellow on startup**
 
 ### Connecting
 
@@ -232,21 +234,21 @@ The brightness is applied automatically through scaling functions:
 
 ### Available Emotes
 
-Emotes change eye colors and trigger servo sequences:
+Emotes change eye colors, trigger servo sequences, and then restore the previous eye color when the sequence finishes:
 
 | Emote | Eye Color | Maestro Script | Description |
 |-------|-----------|----------------|-------------|
 | **angry** | Red | 0 | Angry expression |
 | **curious** | Yellow | 1 | Curious expression |
 | **happy** | Green | 2 | Happy expression |
-| **sad** | Blue | 3 | Sad expression |
-| **go to sleep** | Off | 4 | All LEDs off |
-| **wake up** | White | 5 | Eyes turn white |
-| **yes** | Green | 6 | Affirmative response |
-| **no** | Red | 0* | Negative response |
-| **scared** | Purple | 0* | Scared expression |
+| **no** | Dark Orange | 3 | Negative response |
+| **sad** | Blue | 4 | Sad expression |
+| **scared** | Purple | 5 | Scared expression |
+| **go to sleep** | Off | 6 | All LEDs off |
+| **wake up** | White | 7 | Eyes turn white |
+| **yes** | Green | 8 | Affirmative response |
 
-**Note**: *Emotes marked with * are temporarily using script 0 until additional Maestro sequences are programmed.
+**Eye color restore**: When a servo sequence completes, the eyes automatically return to whatever color was active before the emote was triggered. This means emotes are non-destructive — they express and then return to the prior state.
 
 ### Available Actions
 
@@ -255,8 +257,27 @@ Actions provide utility functions without changing eye colors:
 | Action | Eye Color | LED 3 | Description |
 |--------|-----------|-------|-------------|
 | **flashlight** | Preserved | Toggle | Toggle LED 3 flashlight on/off |
+| **idle on** | Preserved | Preserved | Start idle mode (autonomous random emotes) |
+| **idle off** | Preserved | Preserved | Stop idle mode |
 
 **Note**: "Preserved" means the action maintains the current eye color (LEDs 1 & 2) while only affecting LED 3.
+
+### Idle Mode
+
+Idle mode makes the droid appear active when no one is puppeteering it. When enabled:
+
+- The droid automatically fires emotes in randomized order, cycling through all 9 emotes before repeating
+- Delays between emotes are randomized (6–15 seconds from the start of one emote to the start of the next), producing natural-looking timing
+- After each emote sequence finishes, eyes restore to the pre-idle color before the next emote fires
+- Idle mode stops automatically if any emote button or eye color button is pressed
+- Press **idle off** to stop manually
+
+Idle mode timing is configured with two constants at the top of the sketch:
+
+```cpp
+#define IDLE_MIN_DELAY_MS 6000   // Minimum ms from emote trigger to next emote
+#define IDLE_MAX_DELAY_MS 15000  // Maximum ms from emote trigger to next emote
+```
 
 ### Available Eye Colors
 
@@ -316,7 +337,7 @@ const Button actions[] = {
 };
 ```
 
-**Note**: The flashlight action has special toggle logic in the code. For simple actions, use `triggerButton()`. For custom toggle behavior, add special handling in the action request loop (see flashlight implementation).
+**Note**: The flashlight, idle_start, and idle_stop actions have special handling in the HTTP request loop rather than going through `triggerButton()`. For simple actions, use `triggerButton()`. For custom toggle or mode behavior, add a special case alongside the flashlight implementation.
 
 For a new eye color (changes eyes only), add to `eyeColors[]`:
 
@@ -549,7 +570,7 @@ Monitor debugging info at 115200 baud:
 Maestro serial initialized
 Initializing DFPlayer...
 DFPlayer initialized successfully
-Eyes initialized to white
+Eyes initialized to yellow (brightness 50)
 Configuring Access Point...
 Access Point started!
 SSID: YourDroidName
@@ -676,6 +697,11 @@ For issues or questions:
 4. Check power supply is adequate
 
 ## Version History
+
+- **v1.1**: Behavioral improvements
+  - Yellow eyes on startup (changed from white)
+  - Eye color restore after emote sequences — eyes return to prior color when servo script finishes
+  - Idle mode — autonomous random emote cycling with natural randomized delays
 
 - **v1.0**: Initial release with full feature set
   - ESP32 Access Point mode
