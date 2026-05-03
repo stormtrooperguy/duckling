@@ -86,6 +86,7 @@ CRGB leds[NUM_LEDS];
 CRGB scaleEyeColor(CRGB color);
 CRGB scaleFlashlightColor(CRGB color);
 void shuffleIdleOrder();
+bool parseRequestPath(const char* buffer, char* outPath, int maxLen);
 
 // Button definition structure (used for Emotes, Actions, and Eye Colors)
 struct Button {
@@ -140,9 +141,11 @@ const int numEyeColors = sizeof(eyeColors) / sizeof(eyeColors[0]);
 // Set web server port number to 80
 WiFiServer server(80);
 
-// Variable to store the HTTP request
-String header;
-#define MAX_HEADER_SIZE 512  // Limit header size to prevent memory issues
+// HTTP request buffer (stack-friendly char buffer to avoid heap fragmentation)
+#define MAX_HEADER_SIZE 512
+#define MAX_PATH_SIZE 32
+char header[MAX_HEADER_SIZE];
+int headerLen = 0;
 
 // Status tracking for web display
 String lastEmote = "None";
@@ -151,6 +154,8 @@ String systemStatus = "Initializing...";
 // Eye color restore after emote sequences
 CRGB preEmoteColor = CRGB::Black;
 bool pendingColorRestore = false;
+unsigned long lastScriptStatusCheck = 0;
+#define SCRIPT_STATUS_POLL_MS 150  // How often to poll Maestro for script completion
 
 // Idle mode state
 bool idleMode = false;
@@ -289,7 +294,7 @@ void triggerButton(const Button &button, bool fromIdle = false) {
   }
 
   // Track last action for status display
-  lastEmote = String(button.label);
+  lastEmote = button.label;
   
   #if DEBUG_MODE
     Serial.print("Triggering: ");
@@ -360,11 +365,31 @@ void triggerButton(const Button &button, bool fromIdle = false) {
   }
 }
 
-// Helper function to generate emote button HTML (optimized)
+// Helper function to generate emote button HTML (no heap allocation)
 void createButton(WiFiClient &client, const Button &button) {
-  // Combine multiple small writes into one for better performance
-  String btn = String("<a href=\"/maestro/") + button.path + "\" class=\"button\">" + button.label + "</a>";
-  client.println(btn);
+  client.print("<a href=\"/maestro/");
+  client.print(button.path);
+  client.print("\" class=\"button\">");
+  client.print(button.label);
+  client.println("</a>");
+}
+
+// Extracts the path after "GET /maestro/" into outPath. Returns true if found.
+// Stops at space, '?', '\r', or '\n'. outPath is always null-terminated.
+bool parseRequestPath(const char* buffer, char* outPath, int maxLen) {
+  const char* prefix = "GET /maestro/";
+  const char* found = strstr(buffer, prefix);
+  if (!found) {
+    outPath[0] = '\0';
+    return false;
+  }
+  found += 13;  // strlen("GET /maestro/")
+  int i = 0;
+  while (i < maxLen - 1 && *found && *found != ' ' && *found != '?' && *found != '\r' && *found != '\n') {
+    outPath[i++] = *found++;
+  }
+  outPath[i] = '\0';
+  return i > 0;
 }
 
 void shuffleIdleOrder() {
@@ -380,8 +405,9 @@ void shuffleIdleOrder() {
 }
 
 void loop(){
-  // Restore eye color once the emote servo sequence finishes
-  if (pendingColorRestore && maestroAvailable) {
+  // Restore eye color once the emote servo sequence finishes (rate-limited polling)
+  if (pendingColorRestore && maestroAvailable && (millis() - lastScriptStatusCheck >= SCRIPT_STATUS_POLL_MS)) {
+    lastScriptStatusCheck = millis();
     if (maestro.getScriptStatus() == 1) {  // 1 = script stopped
       noInterrupts();
       leds[0] = preEmoteColor;
@@ -423,87 +449,88 @@ void loop(){
     #if DEBUG_MODE
       Serial.println("New Client.");
     #endif
-    header.reserve(MAX_HEADER_SIZE);        // Pre-allocate memory to avoid reallocation
-    String currentLine = "";                // make a String to hold incoming data from the client
+    headerLen = 0;
+    header[0] = '\0';
+    int currentLineLen = 0;                 // Track current line length (no String allocation)
     while (client.connected() && currentTime - previousTime <= timeoutTime) {  // loop while the client's connected
       currentTime = millis();
       if (client.available()) {             // if there's bytes to read from the client,
         char c = client.read();             // read a byte, then
-        // Only add to header if we haven't exceeded max size
-        if (header.length() < MAX_HEADER_SIZE) {
-          header += c;
+        // Only add to header if we haven't exceeded max size (leave room for null terminator)
+        if (headerLen < MAX_HEADER_SIZE - 1) {
+          header[headerLen++] = c;
+          header[headerLen] = '\0';
         }
         if (c == '\n') {                    // if the byte is a newline character
           // if the current line is blank, you got two newline characters in a row.
           // that's the end of the client HTTP request, so send a response:
-          if (currentLine.length() == 0) {
+          if (currentLineLen == 0) {
             // HTTP headers always start with a response code (e.g. HTTP/1.1 200 OK)
             // and a content-type so the client knows what's coming, then a blank line:
             client.println("HTTP/1.1 200 OK");
             client.println("Content-type:text/html");
             client.println("Connection: close");
             client.println();
-            
-            // Handle emote requests
-            for (int i = 0; i < numEmotes; i++) {
-              String searchPath = String("GET /maestro/") + emotes[i].path;
-              if (header.indexOf(searchPath) >= 0) {
-                triggerButton(emotes[i]);
-                break;
-              }
-            }
-            
-            // Handle action requests
-            for (int i = 0; i < numActions; i++) {
-              String searchPath = String("GET /maestro/") + actions[i].path;
-              if (header.indexOf(searchPath) >= 0) {
-                if (String(actions[i].path) == "flashlight") {
-                  noInterrupts();
-                  bool isOff = (leds[2] == CRGB::Black);
-                  if (isOff) {
-                    leds[2] = scaleFlashlightColor(CRGB::White);
-                    lastEmote = "flashlight on";
-                  } else {
-                    leds[2] = CRGB::Black;
-                    lastEmote = "flashlight off";
-                  }
-                  interrupts();
-                  verifyEyeSync();
-                  FastLED.show();
-                  #if DEBUG_MODE
-                    Serial.print("Flashlight toggled: ");
-                    Serial.println(lastEmote);
-                  #endif
-                } else if (String(actions[i].path) == "idle_start") {
-                  shuffleIdleOrder();
-                  idleShuffleIndex = 0;
-                  idleSequenceRunning = false;
-                  idleNextEmoteTime = millis() + random(IDLE_MIN_DELAY_MS, IDLE_MAX_DELAY_MS);
-                  idleMode = true;
-                  lastEmote = "idle mode on";
-                  #if DEBUG_MODE
-                    Serial.println("Idle mode started");
-                  #endif
-                } else if (String(actions[i].path) == "idle_stop") {
-                  idleMode = false;
-                  idleSequenceRunning = false;
-                  lastEmote = "idle mode off";
-                  #if DEBUG_MODE
-                    Serial.println("Idle mode stopped");
-                  #endif
+
+            // Parse the request path once, then dispatch with strcmp
+            char requestPath[MAX_PATH_SIZE];
+            if (parseRequestPath(header, requestPath, MAX_PATH_SIZE)) {
+              // Special-case actions handled inline (don't go through triggerButton)
+              if (strcmp(requestPath, "flashlight") == 0) {
+                noInterrupts();
+                bool isOff = (leds[2] == CRGB::Black);
+                if (isOff) {
+                  leds[2] = scaleFlashlightColor(CRGB::White);
+                  lastEmote = "flashlight on";
                 } else {
-                  triggerButton(actions[i]);
+                  leds[2] = CRGB::Black;
+                  lastEmote = "flashlight off";
                 }
-                break;
-              }
-            }
-            
-            // Handle eye color requests
-            for (int i = 0; i < numEyeColors; i++) {
-              String searchPath = String("GET /maestro/") + eyeColors[i].path;
-              if (header.indexOf(searchPath) >= 0) {
-                triggerButton(eyeColors[i]);
-                break;
+                interrupts();
+                verifyEyeSync();
+                FastLED.show();
+                #if DEBUG_MODE
+                  Serial.print("Flashlight toggled: ");
+                  Serial.println(lastEmote);
+                #endif
+              } else if (strcmp(requestPath, "idle_start") == 0) {
+                shuffleIdleOrder();
+                idleShuffleIndex = 0;
+                idleSequenceRunning = false;
+                idleNextEmoteTime = millis() + random(IDLE_MIN_DELAY_MS, IDLE_MAX_DELAY_MS);
+                idleMode = true;
+                lastEmote = "idle mode on";
+                #if DEBUG_MODE
+                  Serial.println("Idle mode started");
+                #endif
+              } else if (strcmp(requestPath, "idle_stop") == 0) {
+                idleMode = false;
+                idleSequenceRunning = false;
+                lastEmote = "idle mode off";
+                #if DEBUG_MODE
+                  Serial.println("Idle mode stopped");
+                #endif
+              } else {
+                // Lookup in emotes, then actions, then eye colors
+                bool matched = false;
+                for (int i = 0; i < numEmotes && !matched; i++) {
+                  if (strcmp(requestPath, emotes[i].path) == 0) {
+                    triggerButton(emotes[i]);
+                    matched = true;
+                  }
+                }
+                for (int i = 0; i < numActions && !matched; i++) {
+                  if (strcmp(requestPath, actions[i].path) == 0) {
+                    triggerButton(actions[i]);
+                    matched = true;
+                  }
+                }
+                for (int i = 0; i < numEyeColors && !matched; i++) {
+                  if (strcmp(requestPath, eyeColors[i].path) == 0) {
+                    triggerButton(eyeColors[i]);
+                    matched = true;
+                  }
+                }
               }
             }
             
@@ -572,16 +599,17 @@ void loop(){
             client.println();
             // Break out of the while loop
             break;
-          } else { // if you got a newline, then clear currentLine
-            currentLine = "";
+          } else { // if you got a newline, then reset the line counter
+            currentLineLen = 0;
           }
         } else if (c != '\r') {  // if you got anything else but a carriage return character,
-          currentLine += c;      // add it to the end of the currentLine
+          currentLineLen++;       // count it toward the current line length
         }
       }
     }
-    // Clear the header variable
-    header = "";
+    // Reset the header buffer
+    headerLen = 0;
+    header[0] = '\0';
     // Close the connection (stop() handles flushing automatically)
     client.stop();
     #if DEBUG_MODE

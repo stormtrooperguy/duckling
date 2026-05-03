@@ -698,6 +698,13 @@ For issues or questions:
 
 ## Version History
 
+- **v1.2**: Efficiency pass for long-running stability
+  - Maestro `getScriptStatus()` polling rate-limited to every 150 ms (was every loop iteration, flooding the serial bus)
+  - Replaced `String header` with a fixed `char[]` buffer; replaced `String currentLine` with a length counter — eliminates heap fragmentation from char-by-char request reads
+  - Request path is now parsed once and dispatched via `strcmp` (was 18 String allocations + 18 full-header `indexOf` scans per HTTP request)
+  - `createButton` now writes directly to the client (no per-button String allocation)
+  - New tunable: `SCRIPT_STATUS_POLL_MS` (default 150) controls Maestro poll cadence
+
 - **v1.1**: Behavioral improvements
   - Yellow eyes on startup (changed from white)
   - Eye color restore after emote sequences — eyes return to prior color when servo script finishes
