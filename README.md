@@ -708,6 +708,14 @@ For issues or questions:
 
 ## Version History
 
+- **v1.4**: Active-state button highlighting in the web UI
+  - The button matching the current eye state is highlighted (white inset outline + brightness boost). During an emote sequence the emote button glows; after restore, the underlying eye-color button glows again
+  - "idle on" highlights when idle mode is engaged
+  - "flashlight" highlights when LED 3 is on
+  - JSON status gained `currentEye` (path of active button) and `flashlight` (bool) fields
+  - Buttons now carry `data-path` attributes for JS lookup
+  - Eye state path tracked with `const char*` (no String allocation)
+
 - **v1.3**: AJAX web interface — no more page reloads
   - Button clicks now use `fetch()` instead of full page navigation. Bandwidth per click dropped from ~5 KB to ~80 bytes
   - New endpoints: `GET /` returns the page (sent once on initial load); `GET /status` returns JSON system state; `GET /maestro/<x>` triggers an action and returns the updated JSON status in the same response

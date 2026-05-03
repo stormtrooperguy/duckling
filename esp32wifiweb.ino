@@ -161,6 +161,11 @@ bool pendingColorRestore = false;
 unsigned long lastScriptStatusCheck = 0;
 #define SCRIPT_STATUS_POLL_MS 150  // How often to poll Maestro for script completion
 
+// Current eye state — path of whichever button matches the current LEDs 1&2.
+// Used to highlight the active button in the web UI.
+const char* currentEye = "color_yellow";   // matches startup color
+const char* preEmotePath = "color_yellow"; // saved for restore alongside preEmoteColor
+
 // Idle mode state
 bool idleMode = false;
 bool idleSequenceRunning = false;
@@ -258,7 +263,11 @@ void sendStatusJSON(WiFiClient &client) {
   client.print(maestroAvailable ? "true" : "false");
   client.print(",\"dfplayer\":");
   client.print(dfPlayerAvailable ? "true" : "false");
-  client.print(",\"status\":\"");
+  client.print(",\"flashlight\":");
+  client.print(leds[2] != CRGB::Black ? "true" : "false");
+  client.print(",\"currentEye\":\"");
+  client.print(currentEye);
+  client.print("\",\"status\":\"");
   client.print(systemStatus);
   client.println("\"}");
 }
@@ -316,8 +325,9 @@ void triggerButton(const Button &button, bool fromIdle = false) {
   // Only update LEDs 1 & 2 if not preserving their state
   if (!button.preserveLED12) {
     if (button.scriptNumber >= 0 && maestroAvailable) {
-      // Emote with servo sequence: save current color to restore after sequence ends
+      // Emote with servo sequence: save current state to restore after sequence ends
       preEmoteColor = leds[0];
+      preEmotePath = currentEye;
       pendingColorRestore = true;
     } else {
       // Explicit eye color change: cancel any pending restore
@@ -325,6 +335,7 @@ void triggerButton(const Button &button, bool fromIdle = false) {
     }
     leds[0] = eyeColor;  // LED 1 (dimmed for eye comfort)
     leds[1] = eyeColor;  // LED 2 (always same as LED 1)
+    currentEye = button.path;
   }
   
   // Only update LED 3 if not preserving its state
@@ -369,8 +380,11 @@ void triggerButton(const Button &button, bool fromIdle = false) {
 }
 
 // Helper function to render a button. Click fires JS that hits /maestro/<path>.
+// data-path lets JS find the button to toggle the .active highlight.
 void createButton(WiFiClient &client, const Button &button) {
-  client.print("<button onclick=\"t('");
+  client.print("<button data-path=\"");
+  client.print(button.path);
+  client.print("\" onclick=\"t('");
   client.print(button.path);
   client.print("')\" class=\"button\">");
   client.print(button.label);
@@ -495,6 +509,7 @@ void sendPageHTML(WiFiClient &client) {
     "transition: all 0.3s; text-align: center; box-shadow: 0 3px 5px rgba(0,0,0,0.3); }"
     ".button:hover { transform: translateY(-2px); box-shadow: 0 5px 9px rgba(0,0,0,0.4); opacity: 0.9; }"
     ".button:active { transform: translateY(0); box-shadow: 0 2px 3px rgba(0,0,0,0.3); }"
+    ".button.on { outline: 3px solid #ffffff; outline-offset: -3px; filter: brightness(1.25); }"
     ".status-console { position: fixed; bottom: 0; left: 0; right: 0; background-color: #2a2a2a; "
     "border-top: 2px solid #444; padding: 8px 11px; box-shadow: 0 -2px 8px rgba(0,0,0,0.5); }"
     ".status-console h3 { margin: 0 0 6px 0; font-size: 11px; color: #888; text-align: center; }"
@@ -536,15 +551,20 @@ void sendPageHTML(WiFiClient &client) {
     "</div></div>"
   );
 
-  // Embedded JS: AJAX click handler + 2s status polling
+  // Embedded JS: AJAX click handler + 2s status polling + button highlighting
   client.print(
     "<script>"
+    "function hl(p,on){const b=document.querySelector('button[data-path=\"'+p+'\"]');if(b)b.classList.toggle('on',on);}"
     "function r(d){if(!d)return;"
     "document.getElementById('le').textContent=d.lastEmote;"
     "document.getElementById('im').textContent=d.idle?'On':'Off';"
     "document.getElementById('ms').textContent=d.maestro?'Connected':'Disabled';"
     "document.getElementById('ds').textContent=d.dfplayer?'Connected':'Not Available';"
-    "document.getElementById('ss').textContent=d.status;}"
+    "document.getElementById('ss').textContent=d.status;"
+    "document.querySelectorAll('button.on').forEach(b=>b.classList.remove('on'));"
+    "if(d.currentEye)hl(d.currentEye,true);"
+    "if(d.idle)hl('idle_start',true);"
+    "if(d.flashlight)hl('flashlight',true);}"
     "async function t(p){try{const x=await fetch('/maestro/'+p);r(await x.json());}catch(e){}}"
     "async function q(){try{const x=await fetch('/status');r(await x.json());}catch(e){}}"
     "setInterval(q,2000);q();"
@@ -565,6 +585,7 @@ void loop(){
       leds[1] = preEmoteColor;
       interrupts();
       FastLED.show();
+      currentEye = preEmotePath;
       pendingColorRestore = false;
       if (idleMode) {
         idleSequenceRunning = false;

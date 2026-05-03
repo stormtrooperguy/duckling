@@ -54,13 +54,15 @@ state = {
     "idle": False,
     "maestro": True,
     "dfplayer": True,
+    "flashlight": False,
+    "currentEye": "color_yellow",
     "status": "Ready (emulated)",
 }
 
 
 def buttons_html(items):
     return "\n".join(
-        f'<button onclick="t(\'{path}\')" class="button">{label}</button>'
+        f'<button data-path="{path}" onclick="t(\'{path}\')" class="button">{label}</button>'
         for path, label in items
     )
 
@@ -81,6 +83,7 @@ font-family: inherit; font-size: 15px; font-weight: bold; cursor: pointer;
 transition: all 0.3s; text-align: center; box-shadow: 0 3px 5px rgba(0,0,0,0.3); }}
 .button:hover {{ transform: translateY(-2px); box-shadow: 0 5px 9px rgba(0,0,0,0.4); opacity: 0.9; }}
 .button:active {{ transform: translateY(0); box-shadow: 0 2px 3px rgba(0,0,0,0.3); }}
+.button.on {{ outline: 3px solid #ffffff; outline-offset: -3px; filter: brightness(1.25); }}
 .status-console {{ position: fixed; bottom: 0; left: 0; right: 0; background-color: #2a2a2a;
 border-top: 2px solid #444; padding: 8px 11px; box-shadow: 0 -2px 8px rgba(0,0,0,0.5); }}
 .status-console h3 {{ margin: 0 0 6px 0; font-size: 11px; color: #888; text-align: center; }}
@@ -113,12 +116,17 @@ max-width: 1200px; margin: 0 auto; font-size: 9px; }}
 </div></div>
 
 <script>
+function hl(p,on){{const b=document.querySelector('button[data-path="'+p+'"]');if(b)b.classList.toggle('on',on);}}
 function r(d){{if(!d)return;
 document.getElementById('le').textContent=d.lastEmote;
 document.getElementById('im').textContent=d.idle?'On':'Off';
 document.getElementById('ms').textContent=d.maestro?'Connected':'Disabled';
 document.getElementById('ds').textContent=d.dfplayer?'Connected':'Not Available';
-document.getElementById('ss').textContent=d.status;}}
+document.getElementById('ss').textContent=d.status;
+document.querySelectorAll('button.on').forEach(b=>b.classList.remove('on'));
+if(d.currentEye)hl(d.currentEye,true);
+if(d.idle)hl('idle_start',true);
+if(d.flashlight)hl('flashlight',true);}}
 async function t(p){{try{{const x=await fetch('/maestro/'+p);r(await x.json());}}catch(e){{}}}}
 async function q(){{try{{const x=await fetch('/status');r(await x.json());}}catch(e){{}}}}
 setInterval(q,2000);q();
@@ -137,7 +145,8 @@ def find_label(path):
 
 def dispatch(path):
     if path == "flashlight":
-        state["lastEmote"] = "flashlight (toggled)"
+        state["flashlight"] = not state["flashlight"]
+        state["lastEmote"] = "flashlight on" if state["flashlight"] else "flashlight off"
         return
     if path == "idle_start":
         state["idle"] = True
@@ -152,6 +161,9 @@ def dispatch(path):
         state["lastEmote"] = label
         # Mirror firmware: any user-triggered emote/eye-color cancels idle.
         state["idle"] = False
+        # Track current eye state (emulator does not simulate the post-sequence
+        # restore, so emotes "stick" until the next click — good enough for UI preview).
+        state["currentEye"] = path
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
