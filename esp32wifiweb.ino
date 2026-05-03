@@ -23,7 +23,7 @@
 
 // *** IMPORTANT: Customize these values for your installation ***
 // Replace these strings to customize for your droid
-String droidname = "YourDroidName";      // Change this! Will be your WiFi SSID
+String droidname = "Grek";               // Change this! Will be your WiFi SSID
 String droidcolor = "green";             // Button color (CSS color name)
 
 // Access Point credentials
