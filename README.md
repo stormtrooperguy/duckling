@@ -469,6 +469,16 @@ For optimal web interface responsiveness:
    - With DEBUG_MODE = false: ~200-400ms (fast, responsive)
    - With DEBUG_MODE = true: ~700-900ms (slower, diagnostic)
 
+## Web UI Preview (Local Emulator)
+
+You can preview the web interface in your laptop browser without flashing the ESP32 — useful for tweaking layout, CSS, or testing AJAX behavior.
+
+```bash
+python3 tools/preview.py
+```
+
+Then open `http://localhost:8080`. The emulator serves the same HTML/CSS/JS the firmware sends and provides mock `/status` and `/maestro/<x>` endpoints, so button clicks and the 2-second status poll behave realistically. It uses only the Python standard library (no `pip install` needed). Note that the emulator does not simulate idle-mode auto-firing or eye-color restore — it only responds to your clicks.
+
 ## Troubleshooting
 
 ### General Debugging
