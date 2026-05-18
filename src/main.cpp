@@ -123,14 +123,9 @@ const Button emotes[] = {
 };
 const int numEmotes = sizeof(emotes) / sizeof(emotes[0]);
 
-// ACTIONS: Utility functions that don't change eye colors
-const Button actions[] = {
-  // path          label           colorName  LED1&2 color   LED3 color      preserve12  preserve3  script# mp3#
-  {"flashlight",  "flashlight",  "Flashlight Toggle",  CRGB::Black, CRGB::White, true,  false, -1, -1},
-  {"idle_start",  "idle on",     "Idle Mode On",       CRGB::Black, CRGB::Black, true,  true,  -1, -1},
-  {"idle_stop",   "idle off",    "Idle Mode Off",      CRGB::Black, CRGB::Black, true,  true,  -1, -1}
-};
-const int numActions = sizeof(actions) / sizeof(actions[0]);
+// ACTIONS: previously held flashlight + idle entries; those are now rendered
+// as CSS toggle switches in the web UI and dispatched as special cases below.
+// Kept here as an empty extension point for future button-style actions.
 
 // EYE COLORS: Just change eye colors without servo movements (preserves flashlight state)
 const Button eyeColors[] = {
@@ -407,6 +402,20 @@ void buildPageHtml(String &out) {
          ".button:hover { transform: translateY(-2px); box-shadow: 0 5px 9px rgba(0,0,0,0.4); opacity: 0.9; }"
          ".button:active { transform: translateY(0); box-shadow: 0 2px 3px rgba(0,0,0,0.3); }"
          ".button.on { outline: 3px solid #ffffff; outline-offset: -3px; filter: brightness(1.25); }"
+         ".toggle-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; max-width: 1200px; margin: 0 auto 15px auto; }"
+         ".toggle { background-color: #2a2a2a; border: 1px solid #444; border-radius: 6px; padding: 12px 16px;"
+         "cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 12px;"
+         "font-size: 15px; font-weight: bold; color: white; transition: all 0.2s;"
+         "box-shadow: 0 3px 5px rgba(0,0,0,0.3); user-select: none; -webkit-tap-highlight-color: transparent; }"
+         ".toggle:hover { background-color: #353535; transform: translateY(-2px); box-shadow: 0 5px 9px rgba(0,0,0,0.4); }"
+         ".toggle:active { transform: translateY(0); }"
+         ".toggle-switch { width: 42px; height: 24px; background: #555; border-radius: 12px;"
+         "position: relative; flex-shrink: 0; transition: background 0.2s; }"
+         ".toggle-switch::before { content: ''; position: absolute; top: 3px; left: 3px;"
+         "width: 18px; height: 18px; background: white; border-radius: 50%; transition: transform 0.2s; }"
+         ".toggle.on { background-color: #1f3a2a; border-color: #4ade80; }"
+         ".toggle.on .toggle-switch { background: #4ade80; }"
+         ".toggle.on .toggle-switch::before { transform: translateX(18px); }"
          ".status-console { position: fixed; bottom: 0; left: 0; right: 0; background-color: #2a2a2a;"
          "border-top: 2px solid #444; padding: 8px 11px; box-shadow: 0 -2px 8px rgba(0,0,0,0.5); }"
          ".status-console h3 { margin: 0 0 6px 0; font-size: 11px; color: #888; text-align: center; }"
@@ -423,9 +432,14 @@ void buildPageHtml(String &out) {
   for (int i = 0; i < numEmotes; i++) appendButton(out, emotes[i]);
   out += "</div>";
 
-  out += "<h2>Actions</h2><div class=\"button-grid\">";
-  for (int i = 0; i < numActions; i++) appendButton(out, actions[i]);
-  out += "</div>";
+  out += "<h2>Toggles</h2><div class=\"toggle-grid\">"
+         "<div class=\"toggle\" id=\"tog-flash\" onclick=\"tflash()\">"
+           "<span>Flashlight</span><span class=\"toggle-switch\"></span>"
+         "</div>"
+         "<div class=\"toggle\" id=\"tog-idle\" onclick=\"tidle()\">"
+           "<span>Idle Mode</span><span class=\"toggle-switch\"></span>"
+         "</div>"
+         "</div>";
 
   out += "<h2>Eye Colors</h2><div class=\"button-grid\">";
   for (int i = 0; i < numEyeColors; i++) appendButton(out, eyeColors[i]);
@@ -446,8 +460,9 @@ void buildPageHtml(String &out) {
   // Embedded JS: fire-and-forget action triggers + SSE for live status pushes.
   // No polling: the server pushes state changes the moment they happen.
   out += "<script>"
+         "let st={};"
          "function hl(p,on){const b=document.querySelector('button[data-path=\"'+p+'\"]');if(b)b.classList.toggle('on',on);}"
-         "function r(d){if(!d)return;"
+         "function r(d){if(!d)return;st=d;"
          "document.getElementById('le').textContent=d.lastEmote;"
          "document.getElementById('im').textContent=d.idle?'On':'Off';"
          "document.getElementById('ms').textContent=d.maestro?'Connected':'Disabled';"
@@ -455,9 +470,11 @@ void buildPageHtml(String &out) {
          "document.getElementById('ss').textContent=d.status;"
          "document.querySelectorAll('button.on').forEach(b=>b.classList.remove('on'));"
          "if(d.currentEye)hl(d.currentEye,true);"
-         "if(d.idle)hl('idle_start',true);"
-         "if(d.flashlight)hl('flashlight',true);}"
+         "document.getElementById('tog-flash').classList.toggle('on',!!d.flashlight);"
+         "document.getElementById('tog-idle').classList.toggle('on',!!d.idle);}"
          "async function t(p){try{await fetch('/maestro/'+p);}catch(e){}}"
+         "function tflash(){t('flashlight');}"
+         "function tidle(){t(st.idle?'idle_stop':'idle_start');}"
          "const es=new EventSource('/events');"
          "es.onmessage=e=>{try{r(JSON.parse(e.data));}catch(err){}};"
          "</script>"
@@ -521,12 +538,6 @@ void dispatchMaestroAction(const char* path) {
     for (int i = 0; i < numEmotes && !handled; i++) {
       if (strcmp(path, emotes[i].path) == 0) {
         triggerButton(emotes[i]);
-        handled = true;
-      }
-    }
-    for (int i = 0; i < numActions && !handled; i++) {
-      if (strcmp(path, actions[i].path) == 0) {
-        triggerButton(actions[i]);
         handled = true;
       }
     }

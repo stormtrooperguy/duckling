@@ -13,7 +13,7 @@ A web-based control system for animatronic droids using ESP32, featuring LED eye
 - **Emotes System**: Pre-configured emotional states with coordinated eye colors and servo movements
 - **Eye Color Restore**: After each emote sequence finishes, eyes automatically return to the color they were before the emote
 - **Idle Mode**: Autonomous mode that cycles through emotes in random order with natural timing delays, making the droid look active when not being puppeteered
-- **Actions System**: Utility functions (like flashlight toggle and idle mode) that preserve eye state
+- **Toggle Switches**: Flashlight and Idle Mode rendered as CSS slide toggles in the web UI, reflecting current state at a glance
 - **Eye Colors System**: Quick eye color changes without servo movements (7 colors available)
 - **Performance Optimized**: Fast HTTP response (~200-400ms) with optional debug mode for development
 
@@ -265,17 +265,16 @@ Emotes change eye colors, trigger servo sequences, and then restore the previous
 
 **Eye color restore**: When a servo sequence completes, the eyes automatically return to whatever color was active before the emote was triggered. This means emotes are non-destructive — they express and then return to the prior state.
 
-### Available Actions
+### Toggles
 
-Actions provide utility functions without changing eye colors:
+Modes that are either on or off are rendered as slide-style switches in the web UI rather than push buttons. The current state is shown by the position of the knob and the colour of the pill.
 
-| Action | Eye Color | LED 3 | Description |
-|--------|-----------|-------|-------------|
-| **flashlight** | Preserved | Toggle | Toggle LED 3 flashlight on/off |
-| **idle on** | Preserved | Preserved | Start idle mode (autonomous random emotes) |
-| **idle off** | Preserved | Preserved | Stop idle mode |
+| Toggle | Endpoint(s) | Effect |
+|--------|-------------|--------|
+| **Flashlight** | `GET /maestro/flashlight` (one endpoint toggles) | Turns LED 3 on/off; preserves eye colour |
+| **Idle Mode** | `GET /maestro/idle_start` / `GET /maestro/idle_stop` (JS picks based on current state) | Starts/stops autonomous emote cycling |
 
-**Note**: "Preserved" means the action maintains the current eye color (LEDs 1 & 2) while only affecting LED 3.
+The toggles fan in from the same JSON status that powers the rest of the web UI, so external automation can read `flashlight` and `idle` from `/events` to know the current state.
 
 ### Idle Mode
 
@@ -285,7 +284,7 @@ Idle mode makes the droid appear active when no one is puppeteering it. When ena
 - Delays between emotes are randomized (6–15 seconds from the start of one emote to the start of the next), producing natural-looking timing
 - After each emote sequence finishes, eyes restore to the pre-idle color before the next emote fires
 - Idle mode stops automatically if any emote button or eye color button is pressed
-- Press **idle off** to stop manually
+- Flip the **Idle Mode** toggle off to stop manually
 
 Idle mode timing is configured with two constants at the top of the sketch:
 
@@ -723,6 +722,8 @@ For issues or questions:
 4. Check power supply is adequate
 
 ## Version History
+
+- **v1.8**: Flashlight and Idle Mode are now CSS slide toggles instead of push buttons. The Actions section is replaced with a new Toggles section. Pure-CSS animation, zero extra firmware load — the JS reads current state from the SSE stream and dispatches the correct endpoint on click. `flashlight`/`idle_start`/`idle_stop` HTTP endpoints remain unchanged for any external automation.
 
 - **v1.7**: Replaced synchronous `WiFiServer` with `ESPAsyncWebServer` and swapped status polling for Server-Sent Events. Fixes the long-session hang where the HTTP server would stop responding while the WiFi AP stayed up. Tablets now hold one persistent connection to `/events`; the firmware pushes JSON whenever state changes, eliminating the ~1,800 short-lived TCP connections per hour that the old polling generated. Status updates are now instant rather than trailing by up to 2 seconds. New dependencies: `me-no-dev/AsyncTCP` and `me-no-dev/ESPAsyncWebServer`.
 
