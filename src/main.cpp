@@ -94,10 +94,11 @@ void buildPageHtml(String &out);
 void dispatchMaestroAction(const char* path);
 void setupWebServer();
 
-// Button definition structure (used for Emotes, Actions, and Eye Colors)
+// Button definition structure (used for Emotes and Eye Colors)
 struct Button {
   const char* path;        // URL path (e.g., "sleep")
-  const char* label;       // Button label (e.g., "go to sleep")
+  const char* label;       // Button label / status text
+  const char* emoji;       // Emoji glyph for emote buttons (empty for eye colors)
   const char* colorName;   // Color name for serial output
   CRGB color;              // LED color for LEDs 1 & 2
   CRGB led3Color;          // LED 3 color (separate control)
@@ -108,18 +109,18 @@ struct Button {
 };
 
 // EMOTES: Change eye colors and trigger servo sequences
-// Ordered to match Maestro script programming (0-6)
+// Ordered to match Maestro script programming (0-8)
 const Button emotes[] = {
-  // path          label           colorName  LED1&2 color   LED3 color      preserve12  preserve3  script# mp3#
-  {"angry",        "angry",        "Red",     CRGB::Red,     CRGB::Black,    false,      false,     0,      -1},
-  {"curious",      "curious",      "Yellow",  CRGB::Yellow,  CRGB::Black,    false,      false,     1,      -1},
-  {"happy",        "happy",        "Green",   CRGB::Green,   CRGB::Black,    false,      false,     2,      -1},
-  {"no",           "no",           "Red",     CRGB::DarkOrange,  CRGB::Black,    false,      false,     3,      -1},  
-  {"sad",          "sad",          "Blue",    CRGB::Blue,    CRGB::Black,    false,      false,     4,      -1},
-  {"scared",       "scared",       "Purple",  CRGB::Purple,  CRGB::Black,    false,      false,     5,      -1},
-  {"sleep",        "go to sleep",  "Off",     CRGB::Black,   CRGB::Black,    false,      false,     6,      -1},
-  {"wake",         "wake up",      "White",   CRGB::White,   CRGB::Black,    false,      false,     7,      -1},
-  {"yes",          "yes",          "Green",   CRGB::Green,   CRGB::Black,    false,      false,     8,      -1}
+  // path        label          emoji  colorName  LED1&2 color       LED3 color    preserve12 preserve3 script# mp3#
+  {"angry",      "angry",       "😠",   "Red",     CRGB::Red,         CRGB::Black,  false,     false,    0,      -1},
+  {"curious",    "curious",     "🤔",   "Yellow",  CRGB::Yellow,      CRGB::Black,  false,     false,    1,      -1},
+  {"happy",      "happy",       "😊",   "Green",   CRGB::Green,       CRGB::Black,  false,     false,    2,      -1},
+  {"no",         "no",          "👎",   "Orange",  CRGB::DarkOrange,  CRGB::Black,  false,     false,    3,      -1},
+  {"sad",        "sad",         "😢",   "Blue",    CRGB::Blue,        CRGB::Black,  false,     false,    4,      -1},
+  {"scared",     "scared",      "😨",   "Purple",  CRGB::Purple,      CRGB::Black,  false,     false,    5,      -1},
+  {"sleep",      "go to sleep", "😴",   "Off",     CRGB::Black,       CRGB::Black,  false,     false,    6,      -1},
+  {"wake",       "wake up",     "🌅",   "White",   CRGB::White,       CRGB::Black,  false,     false,    7,      -1},
+  {"yes",        "yes",         "👍",   "Green",   CRGB::Green,       CRGB::Black,  false,     false,    8,      -1}
 };
 const int numEmotes = sizeof(emotes) / sizeof(emotes[0]);
 
@@ -129,14 +130,14 @@ const int numEmotes = sizeof(emotes) / sizeof(emotes[0]);
 
 // EYE COLORS: Just change eye colors without servo movements (preserves flashlight state)
 const Button eyeColors[] = {
-  // path          label           colorName  LED1&2 color   LED3 color      preserve12  preserve3  script# mp3#
-  {"color_white",  "white",        "White",   CRGB::White,   CRGB::Black,    false,      true,      -1,     -1},
-  {"color_yellow", "yellow",       "Yellow",  CRGB::Yellow,  CRGB::Black,    false,      true,      -1,     -1},
-  {"color_orange", "orange",       "Orange",  CRGB::Orange,  CRGB::Black,    false,      true,      -1,     -1},
-  {"color_green",  "green",        "Green",   CRGB::Green,   CRGB::Black,    false,      true,      -1,     -1},
-  {"color_red",    "red",          "Red",     CRGB::Red,     CRGB::Black,    false,      true,      -1,     -1},
-  {"color_blue",   "blue",         "Blue",    CRGB::Blue,    CRGB::Black,    false,      true,      -1,     -1},
-  {"color_purple", "purple",       "Purple",  CRGB::Purple,  CRGB::Black,    false,      true,      -1,     -1}
+  // path           label      emoji  colorName  LED1&2 color      LED3 color    preserve12 preserve3 script# mp3#
+  {"color_white",   "white",   "",    "White",   CRGB::White,      CRGB::Black,  false,     true,     -1,     -1},
+  {"color_yellow",  "yellow",  "",    "Yellow",  CRGB::Yellow,     CRGB::Black,  false,     true,     -1,     -1},
+  {"color_orange",  "orange",  "",    "Orange",  CRGB(255,150,0),  CRGB::Black,  false,     true,     -1,     -1},
+  {"color_green",   "green",   "",    "Green",   CRGB::Green,      CRGB::Black,  false,     true,     -1,     -1},
+  {"color_red",     "red",     "",    "Red",     CRGB::Red,        CRGB::Black,  false,     true,     -1,     -1},
+  {"color_blue",    "blue",    "",    "Blue",    CRGB::Blue,       CRGB::Black,  false,     true,     -1,     -1},
+  {"color_purple",  "purple",  "",    "Purple",  CRGB::Purple,     CRGB::Black,  false,     true,     -1,     -1}
 };
 const int numEyeColors = sizeof(eyeColors) / sizeof(eyeColors[0]);
 
@@ -200,8 +201,8 @@ void setup() {
   FastLED.show();
   
   // Set initial eye color to orange (startup state)
-  leds[0] = scaleEyeColor(CRGB::Orange);  // LED 1 (eye) - dimmed for comfort
-  leds[1] = scaleEyeColor(CRGB::Orange);  // LED 2 (eye) - dimmed for comfort
+  leds[0] = scaleEyeColor(CRGB(255,150,0));  // LED 1 (eye) - dimmed for comfort
+  leds[1] = scaleEyeColor(CRGB(255,150,0));  // LED 2 (eye) - dimmed for comfort
   leds[2] = CRGB::Black;                   // LED 3 (flashlight off)
   FastLED.show();
   lastEmote = "orange (startup)";
@@ -368,15 +369,48 @@ void triggerButton(const Button &button, bool fromIdle = false) {
   }
 }
 
+// CSS hex string for a CRGB ("#RRGGBB"). Used to color eye-color buttons.
+static String rgbToHex(const CRGB &c) {
+  char buf[8];
+  snprintf(buf, sizeof(buf), "#%02X%02X%02X", c.r, c.g, c.b);
+  return String(buf);
+}
+
+// Perceptual luminance test; true for colors light enough to need dark text.
+static bool isLightColor(const CRGB &c) {
+  int lum = (c.r * 299 + c.g * 587 + c.b * 114) / 1000;
+  return lum > 180;
+}
+
 // Append one button's HTML to out. Click fires JS that hits /maestro/<path>.
 // data-path lets JS toggle the .on highlight on the right button.
-void appendButton(String &out, const Button &button) {
+// If button.emoji is non-empty, renders an emote-style button (big emoji
+// stacked above a small label). If useOwnColor is true, the button's own
+// .color is used as the background (with text color picked for contrast).
+void appendButton(String &out, const Button &button, bool useOwnColor = false) {
   out += "<button data-path=\"";
   out += button.path;
   out += "\" onclick=\"t('";
   out += button.path;
-  out += "')\" class=\"button\">";
-  out += button.label;
+  out += "')\" class=\"button";
+  if (button.emoji && button.emoji[0]) out += " emote";
+  out += "\"";
+  if (useOwnColor) {
+    out += " style=\"background-color:";
+    out += rgbToHex(button.color);
+    if (isLightColor(button.color)) out += ";color:#111";
+    out += ";\"";
+  }
+  out += ">";
+  if (button.emoji && button.emoji[0]) {
+    out += "<span class=\"emoji\">";
+    out += button.emoji;
+    out += "</span><span class=\"elabel\">";
+    out += button.label;
+    out += "</span>";
+  } else {
+    out += button.label;
+  }
   out += "</button>";
 }
 
@@ -402,6 +436,9 @@ void buildPageHtml(String &out) {
          ".button:hover { transform: translateY(-2px); box-shadow: 0 5px 9px rgba(0,0,0,0.4); opacity: 0.9; }"
          ".button:active { transform: translateY(0); box-shadow: 0 2px 3px rgba(0,0,0,0.3); }"
          ".button.on { outline: 3px solid #ffffff; outline-offset: -3px; filter: brightness(1.25); }"
+         ".button.emote { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px; }"
+         ".button.emote .emoji { font-size: 30px; line-height: 1; }"
+         ".button.emote .elabel { font-size: 11px; font-weight: normal; opacity: 0.85; }"
          ".toggle-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; max-width: 1200px; margin: 0 auto 15px auto; }"
          ".toggle { background-color: #2a2a2a; border: 1px solid #444; border-radius: 6px; padding: 12px 16px;"
          "cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 12px;"
@@ -442,7 +479,7 @@ void buildPageHtml(String &out) {
          "</div>";
 
   out += "<h2>Eye Colors</h2><div class=\"button-grid\">";
-  for (int i = 0; i < numEyeColors; i++) appendButton(out, eyeColors[i]);
+  for (int i = 0; i < numEyeColors; i++) appendButton(out, eyeColors[i], /*useOwnColor=*/true);
   out += "</div>";
 
   // Status console: static structure, values populated by SSE pushes
@@ -555,7 +592,7 @@ void dispatchMaestroAction(const char* path) {
 void setupWebServer() {
   // Main page (built once at startup, just streamed out here)
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *req) {
-    req->send(200, "text/html", pageHtml);
+    req->send(200, "text/html; charset=utf-8", pageHtml);
   });
 
   // Server-Sent Events endpoint — clients open once, receive pushes.

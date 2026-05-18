@@ -723,6 +723,12 @@ For issues or questions:
 
 ## Version History
 
+- **v1.9**: Operator UX polish
+  - Emote buttons now render as large emoji with a small text label below (😠 angry, 🤔 curious, 😊 happy, 👎 no, 😢 sad, 😨 scared, 😴 sleep, 🌅 wake, 👍 yes). HTML response now declares UTF-8 charset.
+  - Each eye-color button is painted in its target color; label text auto-flips to dark for light backgrounds (white, yellow) so it stays legible.
+  - Orange shifted slightly toward red — was `CRGB::Orange` (255,165,0), now `CRGB(255,150,0)`. Applied to both the startup color and the `color_orange` button.
+  - Added `emoji` field to the `Button` struct (empty string for non-emote buttons).
+
 - **v1.8**: Flashlight and Idle Mode are now CSS slide toggles instead of push buttons. The Actions section is replaced with a new Toggles section. Pure-CSS animation, zero extra firmware load — the JS reads current state from the SSE stream and dispatches the correct endpoint on click. `flashlight`/`idle_start`/`idle_stop` HTTP endpoints remain unchanged for any external automation.
 
 - **v1.7**: Replaced synchronous `WiFiServer` with `ESPAsyncWebServer` and swapped status polling for Server-Sent Events. Fixes the long-session hang where the HTTP server would stop responding while the WiFi AP stayed up. Tablets now hold one persistent connection to `/events`; the firmware pushes JSON whenever state changes, eliminating the ~1,800 short-lived TCP connections per hour that the old polling generated. Status updates are now instant rather than trailing by up to 2 seconds. New dependencies: `me-no-dev/AsyncTCP` and `me-no-dev/ESPAsyncWebServer`.
