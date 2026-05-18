@@ -80,24 +80,39 @@ DFPlayer SPK-      → Speaker -
 
 ## Software Requirements
 
-### Arduino IDE Setup
+### PlatformIO
 
-1. **Install ESP32 Board Support**
-   - Add to Board Manager URLs: `https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json`
-   - Tools → Board → Boards Manager → Search "ESP32" → Install
+This project uses [PlatformIO](https://platformio.org/) for building, library management, and flashing. The project layout follows the standard PlatformIO convention: source in `src/`, dependencies pinned in `platformio.ini`.
 
-2. **Install Required Libraries**
-   - `FastLED` by Daniel Garcia
-   - `PololuMaestro` by Pololu
-   - `DFRobotDFPlayerMini` by DFRobot
+**Install PlatformIO Core** (CLI) — see [docs](https://docs.platformio.org/en/latest/core/installation/index.html). On macOS the easiest path is:
 
-   Install via: Sketch → Include Library → Manage Libraries
+```bash
+brew install platformio
+```
+
+Or install the [PlatformIO IDE extension](https://platformio.org/install/ide) for VS Code, which bundles everything.
+
+**Build, upload, and monitor:**
+
+```bash
+pio run                  # compile only
+pio run --target upload  # compile + flash to the board
+pio device monitor       # open serial monitor (115200 baud)
+```
+
+The first `pio run` will download all dependencies into `.pio/` (gitignored). Dependencies and their pinned versions live in `platformio.ini`:
+
+- `FastLED` — LED control (^3.7.0)
+- `PololuMaestro` — servo controller (^1.0.0)
+- `DFRobotDFPlayerMini` — MP3 module (^1.0.6)
+
+Adjust `upload_port` / `monitor_port` in `platformio.ini` if your board enumerates as a different serial device.
 
 ## Configuration
 
 ### Basic Settings
 
-Edit these variables at the top of the sketch:
+Edit these variables at the top of `src/main.cpp`:
 
 ```cpp
 // Debug Configuration
@@ -217,8 +232,8 @@ The brightness is applied automatically through scaling functions:
 
 ### Initial Setup
 
-1. Upload the sketch to ESP32
-2. Open Serial Monitor (115200 baud) to see connection details
+1. Flash the firmware: `pio run --target upload`
+2. Open the serial monitor: `pio device monitor` (115200 baud)
 3. ESP32 will create a WiFi access point
 4. **Eyes automatically turn yellow on startup**
 
@@ -707,6 +722,13 @@ For issues or questions:
 4. Check power supply is adequate
 
 ## Version History
+
+- **v1.5**: Migrated to PlatformIO
+  - Added `platformio.ini` with pinned library versions
+  - Moved sketch to `src/main.cpp` (renamed from `esp32wifiweb.ino`); git history preserved via `git mv`
+  - Added `.gitignore` for `.pio/` and `.vscode/`
+  - Build/upload/monitor now via `pio` CLI; Arduino IDE workflow deprecated
+  - Verified clean compile: RAM 14.2%, Flash 59.9%
 
 - **v1.4**: Active-state button highlighting in the web UI
   - The button matching the current eye state is highlighted (white inset outline + brightness boost). During an emote sequence the emote button glows; after restore, the underlying eye-color button glows again
