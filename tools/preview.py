@@ -1,26 +1,28 @@
 #!/usr/bin/env python3
 """ESP32 Droid Control System — local web UI emulator.
 
-Serves the same HTML/CSS/JS the firmware sends, with mock JSON endpoints
-so AJAX clicks and the status poll behave realistically. Lets you preview
-UI changes without flashing the device.
+Serves the same HTML/CSS/JS the firmware sends, with mock action and
+Server-Sent Events endpoints. Lets you preview UI changes without
+flashing the device.
 
 Run:    python3 tools/preview.py
 Open:   http://localhost:8080
 
-The HTML/CSS/JS in render_page() and the JSON shape in /status mirror
-sendPageHTML() and sendStatusJSON() in esp32wifiweb.ino. When the
+The HTML/CSS/JS in render_page() and the JSON shape in build_status_json()
+mirror buildPageHtml() and buildStatusJson() in src/main.cpp. When the
 firmware changes, update this file to match (see CLAUDE.md).
 """
 
 import http.server
 import json
+import queue
+import threading
 
 PORT = 8080
 DROID_NAME = "Grek"
 DROID_COLOR = "green"
 
-# Mirror the const arrays in esp32wifiweb.ino: (path, label) per button.
+# Mirror the const arrays in src/main.cpp: (path, label) per button.
 EMOTES = [
     ("angry",   "angry"),
     ("curious", "curious"),
@@ -59,6 +61,11 @@ state = {
     "currentEye": "color_orange",
     "status": "Ready (emulated)",
 }
+state_lock = threading.Lock()
+
+# Active SSE subscribers (one queue per connected client).
+sse_clients = set()
+sse_clients_lock = threading.Lock()
 
 
 def buttons_html(items):
@@ -128,9 +135,9 @@ document.querySelectorAll('button.on').forEach(b=>b.classList.remove('on'));
 if(d.currentEye)hl(d.currentEye,true);
 if(d.idle)hl('idle_start',true);
 if(d.flashlight)hl('flashlight',true);}}
-async function t(p){{try{{const x=await fetch('/maestro/'+p);r(await x.json());}}catch(e){{}}}}
-async function q(){{try{{const x=await fetch('/status');r(await x.json());}}catch(e){{}}}}
-setInterval(q,2000);q();
+async function t(p){{try{{await fetch('/maestro/'+p);}}catch(e){{}}}}
+const es=new EventSource('/events');
+es.onmessage=e=>{{try{{r(JSON.parse(e.data));}}catch(err){{}}}};
 </script>
 </body></html>
 """
@@ -145,26 +152,42 @@ def find_label(path):
 
 
 def dispatch(path):
-    if path == "flashlight":
-        state["flashlight"] = not state["flashlight"]
-        state["lastEmote"] = "flashlight on" if state["flashlight"] else "flashlight off"
-        return
-    if path == "idle_start":
-        state["idle"] = True
-        state["lastEmote"] = "idle mode on"
-        return
-    if path == "idle_stop":
-        state["idle"] = False
-        state["lastEmote"] = "idle mode off"
-        return
-    label = find_label(path)
-    if label is not None:
-        state["lastEmote"] = label
-        # Mirror firmware: any user-triggered emote/eye-color cancels idle.
-        state["idle"] = False
-        # Track current eye state (emulator does not simulate the post-sequence
-        # restore, so emotes "stick" until the next click — good enough for UI preview).
-        state["currentEye"] = path
+    """Mutate state to mirror the firmware's dispatchMaestroAction."""
+    with state_lock:
+        if path == "flashlight":
+            state["flashlight"] = not state["flashlight"]
+            state["lastEmote"] = "flashlight on" if state["flashlight"] else "flashlight off"
+        elif path == "idle_start":
+            state["idle"] = True
+            state["lastEmote"] = "idle mode on"
+        elif path == "idle_stop":
+            state["idle"] = False
+            state["lastEmote"] = "idle mode off"
+        else:
+            label = find_label(path)
+            if label is not None:
+                state["lastEmote"] = label
+                # Any user-triggered emote/eye-color cancels idle.
+                state["idle"] = False
+                # Track current eye state (emulator does not simulate the
+                # post-sequence restore, so emotes "stick" until the next click).
+                state["currentEye"] = path
+
+
+def snapshot_state():
+    with state_lock:
+        return dict(state)
+
+
+def push_status():
+    """Fan out the current state to every connected SSE client."""
+    payload = json.dumps(snapshot_state())
+    with sse_clients_lock:
+        for q in list(sse_clients):
+            try:
+                q.put_nowait(payload)
+            except queue.Full:
+                pass
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -175,12 +198,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if self.path == "/":
             self._send(200, "text/html; charset=utf-8", render_page())
             return
-        if self.path == "/status":
-            self._send_json(state)
+        if self.path == "/events":
+            self._stream_sse()
             return
         if self.path.startswith("/maestro/"):
             dispatch(self.path[len("/maestro/"):])
-            self._send_json(state)
+            push_status()
+            self._send(200, "text/plain", "OK")
             return
         self._send(404, "text/plain", "Not Found\n")
 
@@ -193,13 +217,43 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body_bytes)
 
-    def _send_json(self, payload):
-        self._send(200, "application/json", json.dumps(payload))
+    def _stream_sse(self):
+        """Subscribe this client and stream JSON messages until disconnect."""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "keep-alive")
+        self.end_headers()
+
+        my_queue = queue.Queue(maxsize=8)
+        with sse_clients_lock:
+            sse_clients.add(my_queue)
+
+        # Send current state immediately so the page populates on connect.
+        try:
+            my_queue.put_nowait(json.dumps(snapshot_state()))
+        except queue.Full:
+            pass
+
+        try:
+            while True:
+                payload = my_queue.get()  # blocks until push_status() fires
+                self.wfile.write(f"data: {payload}\n\n".encode("utf-8"))
+                self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        finally:
+            with sse_clients_lock:
+                sse_clients.discard(my_queue)
+
+
+class ThreadingHTTPServer(http.server.ThreadingHTTPServer):
+    daemon_threads = True
 
 
 def main():
     addr = ("127.0.0.1", PORT)
-    httpd = http.server.HTTPServer(addr, Handler)
+    httpd = ThreadingHTTPServer(addr, Handler)
     print(f"Droid emulator listening on http://{addr[0]}:{addr[1]}")
     print("Press Ctrl-C to stop.")
     try:

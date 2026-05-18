@@ -493,7 +493,7 @@ You can preview the web interface in your laptop browser without flashing the ES
 python3 tools/preview.py
 ```
 
-Then open `http://localhost:8080`. The emulator serves the same HTML/CSS/JS the firmware sends and provides mock `/status` and `/maestro/<x>` endpoints, so button clicks and the 2-second status poll behave realistically. It uses only the Python standard library (no `pip install` needed). Note that the emulator does not simulate idle-mode auto-firing or eye-color restore — it only responds to your clicks.
+Then open `http://localhost:8080`. The emulator serves the same HTML/CSS/JS the firmware sends and provides mock `/events` (Server-Sent Events) and `/maestro/<x>` endpoints, so button clicks and live status pushes behave realistically. It uses only the Python standard library (no `pip install` needed). Note that the emulator does not simulate idle-mode auto-firing or eye-color restore — it only responds to your clicks.
 
 ## Troubleshooting
 
@@ -723,6 +723,8 @@ For issues or questions:
 4. Check power supply is adequate
 
 ## Version History
+
+- **v1.7**: Replaced synchronous `WiFiServer` with `ESPAsyncWebServer` and swapped status polling for Server-Sent Events. Fixes the long-session hang where the HTTP server would stop responding while the WiFi AP stayed up. Tablets now hold one persistent connection to `/events`; the firmware pushes JSON whenever state changes, eliminating the ~1,800 short-lived TCP connections per hour that the old polling generated. Status updates are now instant rather than trailing by up to 2 seconds. New dependencies: `me-no-dev/AsyncTCP` and `me-no-dev/ESPAsyncWebServer`.
 
 - **v1.6**: Added orange to the eye color palette and made it the new startup default (was yellow). Total eye color options: 7.
 

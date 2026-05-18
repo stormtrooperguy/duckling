@@ -18,8 +18,10 @@
   - Debug mode for development and troubleshooting
 *********/
 
-// Load Wi-Fi library
+// Load Wi-Fi library + async HTTP server
 #include <WiFi.h>
+#include <AsyncTCP.h>
+#include <ESPAsyncWebServer.h>
 
 // *** IMPORTANT: Customize these values for your installation ***
 // Replace these strings to customize for your droid
@@ -86,11 +88,11 @@ CRGB leds[NUM_LEDS];
 CRGB scaleEyeColor(CRGB color);
 CRGB scaleFlashlightColor(CRGB color);
 void shuffleIdleOrder();
-bool parseRequestUrl(const char* buffer, char* outUrl, int maxLen);
-void sendStatusJSON(WiFiClient &client);
-void sendPageHTML(WiFiClient &client);
-void sendNotFound(WiFiClient &client);
+void buildStatusJson(String &out);
+void pushStatus();
+void buildPageHtml(String &out);
 void dispatchMaestroAction(const char* path);
+void setupWebServer();
 
 // Button definition structure (used for Emotes, Actions, and Eye Colors)
 struct Button {
@@ -143,14 +145,12 @@ const Button eyeColors[] = {
 };
 const int numEyeColors = sizeof(eyeColors) / sizeof(eyeColors[0]);
 
-// Set web server port number to 80
-WiFiServer server(80);
+// Async HTTP server + SSE event stream for live status pushes
+AsyncWebServer server(80);
+AsyncEventSource events("/events");
 
-// HTTP request buffer (stack-friendly char buffer to avoid heap fragmentation)
-#define MAX_HEADER_SIZE 512
-#define MAX_PATH_SIZE 32
-char header[MAX_HEADER_SIZE];
-int headerLen = 0;
+// Page HTML, built once in setup(), reused for every "/" request
+String pageHtml;
 
 // Status tracking for web display
 String lastEmote = "None";
@@ -173,13 +173,6 @@ bool idleSequenceRunning = false;
 unsigned long idleNextEmoteTime = 0;
 int idleShuffleOrder[16];  // Max emote count
 int idleShuffleIndex = 0;
-
-// Current time
-unsigned long currentTime = millis();
-// Previous time
-unsigned long previousTime = 0; 
-// Define timeout time in milliseconds (optimized for faster response)
-const long timeoutTime = 1000;  // Reduced from 2000ms to 1000ms
 
 void setup() {
   Serial.begin(115200);
@@ -246,39 +239,39 @@ void setup() {
   
   // Set system status for web display
   systemStatus = "Ready";
-  
-  server.begin();
+
+  // Build the page HTML once (uses droidname/droidcolor, never changes)
+  buildPageHtml(pageHtml);
+
+  // Register routes + SSE handler and start the async server
+  setupWebServer();
 }
 
-// Sends current system state as JSON. Used by /status polling and /maestro/<x> response.
-void sendStatusJSON(WiFiClient &client) {
-  client.println("HTTP/1.1 200 OK");
-  client.println("Content-type:application/json");
-  client.println("Connection: close");
-  client.println();
-  client.print("{\"lastEmote\":\"");
-  client.print(lastEmote);
-  client.print("\",\"idle\":");
-  client.print(idleMode ? "true" : "false");
-  client.print(",\"maestro\":");
-  client.print(maestroAvailable ? "true" : "false");
-  client.print(",\"dfplayer\":");
-  client.print(dfPlayerAvailable ? "true" : "false");
-  client.print(",\"flashlight\":");
-  client.print(leds[2] != CRGB::Black ? "true" : "false");
-  client.print(",\"currentEye\":\"");
-  client.print(currentEye);
-  client.print("\",\"status\":\"");
-  client.print(systemStatus);
-  client.println("\"}");
+// Builds the system-state JSON into out. Used by SSE pushes.
+void buildStatusJson(String &out) {
+  out = "{\"lastEmote\":\"";
+  out += lastEmote;
+  out += "\",\"idle\":";
+  out += (idleMode ? "true" : "false");
+  out += ",\"maestro\":";
+  out += (maestroAvailable ? "true" : "false");
+  out += ",\"dfplayer\":";
+  out += (dfPlayerAvailable ? "true" : "false");
+  out += ",\"flashlight\":";
+  out += (leds[2] != CRGB::Black ? "true" : "false");
+  out += ",\"currentEye\":\"";
+  out += currentEye;
+  out += "\",\"status\":\"";
+  out += systemStatus;
+  out += "\"}";
 }
 
-void sendNotFound(WiFiClient &client) {
-  client.println("HTTP/1.1 404 Not Found");
-  client.println("Content-type:text/plain");
-  client.println("Connection: close");
-  client.println();
-  client.println("Not Found");
+// Pushes current state to all SSE subscribers. Cheap if no clients connected.
+void pushStatus() {
+  if (events.count() == 0) return;
+  String json;
+  buildStatusJson(json);
+  events.send(json.c_str(), "message", millis());
 }
 
 // Safety function to ensure eyes (LEDs 1 & 2) are always synchronized
@@ -380,32 +373,95 @@ void triggerButton(const Button &button, bool fromIdle = false) {
   }
 }
 
-// Helper function to render a button. Click fires JS that hits /maestro/<path>.
-// data-path lets JS find the button to toggle the .active highlight.
-void createButton(WiFiClient &client, const Button &button) {
-  client.print("<button data-path=\"");
-  client.print(button.path);
-  client.print("\" onclick=\"t('");
-  client.print(button.path);
-  client.print("')\" class=\"button\">");
-  client.print(button.label);
-  client.println("</button>");
+// Append one button's HTML to out. Click fires JS that hits /maestro/<path>.
+// data-path lets JS toggle the .on highlight on the right button.
+void appendButton(String &out, const Button &button) {
+  out += "<button data-path=\"";
+  out += button.path;
+  out += "\" onclick=\"t('";
+  out += button.path;
+  out += "')\" class=\"button\">";
+  out += button.label;
+  out += "</button>";
 }
 
-// Extracts the URL after "GET " into outUrl (e.g., "/", "/status", "/maestro/angry").
-// Stops at space or '?'. outUrl is always null-terminated. Returns true on success.
-bool parseRequestUrl(const char* buffer, char* outUrl, int maxLen) {
-  if (strncmp(buffer, "GET ", 4) != 0) {
-    outUrl[0] = '\0';
-    return false;
-  }
-  const char* p = buffer + 4;
-  int i = 0;
-  while (i < maxLen - 1 && *p && *p != ' ' && *p != '?' && *p != '\r' && *p != '\n') {
-    outUrl[i++] = *p++;
-  }
-  outUrl[i] = '\0';
-  return i > 0;
+// Builds the full control page HTML into out. Called once at startup; the
+// result is stored in pageHtml and served by the "/" route handler.
+void buildPageHtml(String &out) {
+  out.reserve(4096);
+  out = "<!DOCTYPE html><html>"
+        "<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+        "<link rel=\"icon\" href=\"data:,\">"
+        "<style>"
+        "* { margin: 0; padding: 0; box-sizing: border-box; }"
+        "html { font-family: Helvetica, Arial, sans-serif; }"
+        "body { background-color: #1a1a1a; color: #ffffff; padding: 11px; padding-bottom: 78px; }"
+        "h1 { text-align: center; margin-bottom: 15px; font-size: 24px; }"
+        "h2 { text-align: center; margin: 15px 0 8px 0; font-size: 17px; color: #aaa; }"
+        ".button-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: 8px; max-width: 1200px; margin: 0 auto 15px auto; }"
+        ".button { background-color: ";
+  out += droidcolor;
+  out += "; border: none; border-radius: 6px; color: white; padding: 15px 11px;"
+         "font-family: inherit; font-size: 15px; font-weight: bold; cursor: pointer;"
+         "transition: all 0.3s; text-align: center; box-shadow: 0 3px 5px rgba(0,0,0,0.3); }"
+         ".button:hover { transform: translateY(-2px); box-shadow: 0 5px 9px rgba(0,0,0,0.4); opacity: 0.9; }"
+         ".button:active { transform: translateY(0); box-shadow: 0 2px 3px rgba(0,0,0,0.3); }"
+         ".button.on { outline: 3px solid #ffffff; outline-offset: -3px; filter: brightness(1.25); }"
+         ".status-console { position: fixed; bottom: 0; left: 0; right: 0; background-color: #2a2a2a;"
+         "border-top: 2px solid #444; padding: 8px 11px; box-shadow: 0 -2px 8px rgba(0,0,0,0.5); }"
+         ".status-console h3 { margin: 0 0 6px 0; font-size: 11px; color: #888; text-align: center; }"
+         ".status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: 6px;"
+         "max-width: 1200px; margin: 0 auto; font-size: 9px; }"
+         ".status-item { background-color: #1a1a1a; padding: 5px 8px; border-radius: 3px; border: 1px solid #444; }"
+         ".status-item strong { color: #aaa; margin-right: 5px; }"
+         "</style></head>"
+         "<body><h1>BDX Control System (";
+  out += droidname;
+  out += ")</h1>";
+
+  out += "<h2>Emotes</h2><div class=\"button-grid\">";
+  for (int i = 0; i < numEmotes; i++) appendButton(out, emotes[i]);
+  out += "</div>";
+
+  out += "<h2>Actions</h2><div class=\"button-grid\">";
+  for (int i = 0; i < numActions; i++) appendButton(out, actions[i]);
+  out += "</div>";
+
+  out += "<h2>Eye Colors</h2><div class=\"button-grid\">";
+  for (int i = 0; i < numEyeColors; i++) appendButton(out, eyeColors[i]);
+  out += "</div>";
+
+  // Status console: static structure, values populated by SSE pushes
+  out += "<div class=\"status-console\"><h3>System Status</h3><div class=\"status-grid\">"
+         "<div class=\"status-item\"><strong>Network:</strong> ";
+  out += droidname;
+  out += " (192.168.4.1)</div>"
+         "<div class=\"status-item\"><strong>Maestro:</strong> <span id=\"ms\">&mdash;</span></div>"
+         "<div class=\"status-item\"><strong>DFPlayer:</strong> <span id=\"ds\">&mdash;</span></div>"
+         "<div class=\"status-item\"><strong>Idle:</strong> <span id=\"im\">&mdash;</span></div>"
+         "<div class=\"status-item\"><strong>Status:</strong> <span id=\"ss\">&mdash;</span></div>"
+         "<div class=\"status-item\"><strong>Last:</strong> <span id=\"le\">&mdash;</span></div>"
+         "</div></div>";
+
+  // Embedded JS: fire-and-forget action triggers + SSE for live status pushes.
+  // No polling: the server pushes state changes the moment they happen.
+  out += "<script>"
+         "function hl(p,on){const b=document.querySelector('button[data-path=\"'+p+'\"]');if(b)b.classList.toggle('on',on);}"
+         "function r(d){if(!d)return;"
+         "document.getElementById('le').textContent=d.lastEmote;"
+         "document.getElementById('im').textContent=d.idle?'On':'Off';"
+         "document.getElementById('ms').textContent=d.maestro?'Connected':'Disabled';"
+         "document.getElementById('ds').textContent=d.dfplayer?'Connected':'Not Available';"
+         "document.getElementById('ss').textContent=d.status;"
+         "document.querySelectorAll('button.on').forEach(b=>b.classList.remove('on'));"
+         "if(d.currentEye)hl(d.currentEye,true);"
+         "if(d.idle)hl('idle_start',true);"
+         "if(d.flashlight)hl('flashlight',true);}"
+         "async function t(p){try{await fetch('/maestro/'+p);}catch(e){}}"
+         "const es=new EventSource('/events');"
+         "es.onmessage=e=>{try{r(JSON.parse(e.data));}catch(err){}};"
+         "</script>"
+         "</body></html>";
 }
 
 void shuffleIdleOrder() {
@@ -422,6 +478,7 @@ void shuffleIdleOrder() {
 
 // Runs the action identified by the path component after "/maestro/".
 void dispatchMaestroAction(const char* path) {
+  bool handled = false;
   if (strcmp(path, "flashlight") == 0) {
     noInterrupts();
     bool isOff = (leds[2] == CRGB::Black);
@@ -439,9 +496,8 @@ void dispatchMaestroAction(const char* path) {
       Serial.print("Flashlight toggled: ");
       Serial.println(lastEmote);
     #endif
-    return;
-  }
-  if (strcmp(path, "idle_start") == 0) {
+    handled = true;
+  } else if (strcmp(path, "idle_start") == 0) {
     shuffleIdleOrder();
     idleShuffleIndex = 0;
     idleSequenceRunning = false;
@@ -451,129 +507,63 @@ void dispatchMaestroAction(const char* path) {
     #if DEBUG_MODE
       Serial.println("Idle mode started");
     #endif
-    return;
-  }
-  if (strcmp(path, "idle_stop") == 0) {
+    handled = true;
+  } else if (strcmp(path, "idle_stop") == 0) {
     idleMode = false;
     idleSequenceRunning = false;
     lastEmote = "idle mode off";
     #if DEBUG_MODE
       Serial.println("Idle mode stopped");
     #endif
-    return;
+    handled = true;
   }
-  for (int i = 0; i < numEmotes; i++) {
-    if (strcmp(path, emotes[i].path) == 0) {
-      triggerButton(emotes[i]);
-      return;
+  if (!handled) {
+    for (int i = 0; i < numEmotes && !handled; i++) {
+      if (strcmp(path, emotes[i].path) == 0) {
+        triggerButton(emotes[i]);
+        handled = true;
+      }
+    }
+    for (int i = 0; i < numActions && !handled; i++) {
+      if (strcmp(path, actions[i].path) == 0) {
+        triggerButton(actions[i]);
+        handled = true;
+      }
+    }
+    for (int i = 0; i < numEyeColors && !handled; i++) {
+      if (strcmp(path, eyeColors[i].path) == 0) {
+        triggerButton(eyeColors[i]);
+        handled = true;
+      }
     }
   }
-  for (int i = 0; i < numActions; i++) {
-    if (strcmp(path, actions[i].path) == 0) {
-      triggerButton(actions[i]);
-      return;
-    }
-  }
-  for (int i = 0; i < numEyeColors; i++) {
-    if (strcmp(path, eyeColors[i].path) == 0) {
-      triggerButton(eyeColors[i]);
-      return;
-    }
-  }
+  if (handled) pushStatus();
 }
 
-// Renders the full control page. Sent once on initial load (GET /).
-// All button clicks and status updates happen via embedded JS without page reload.
-void sendPageHTML(WiFiClient &client) {
-  client.println("HTTP/1.1 200 OK");
-  client.println("Content-type:text/html");
-  client.println("Connection: close");
-  client.println();
 
-  client.print(
-    "<!DOCTYPE html><html>"
-    "<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
-    "<link rel=\"icon\" href=\"data:,\">"
-    "<style>"
-    "* { margin: 0; padding: 0; box-sizing: border-box; }"
-    "html { font-family: Helvetica, Arial, sans-serif; }"
-    "body { background-color: #1a1a1a; color: #ffffff; padding: 11px; padding-bottom: 78px; }"
-    "h1 { text-align: center; margin-bottom: 15px; font-size: 24px; }"
-    "h2 { text-align: center; margin: 15px 0 8px 0; font-size: 17px; color: #aaa; }"
-    ".button-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: 8px; max-width: 1200px; margin: 0 auto 15px auto; }"
-    ".button { background-color: "
-  );
-  client.print(droidcolor);
-  client.print(
-    "; border: none; border-radius: 6px; color: white; padding: 15px 11px;"
-    "font-family: inherit; font-size: 15px; font-weight: bold; cursor: pointer;"
-    "transition: all 0.3s; text-align: center; box-shadow: 0 3px 5px rgba(0,0,0,0.3); }"
-    ".button:hover { transform: translateY(-2px); box-shadow: 0 5px 9px rgba(0,0,0,0.4); opacity: 0.9; }"
-    ".button:active { transform: translateY(0); box-shadow: 0 2px 3px rgba(0,0,0,0.3); }"
-    ".button.on { outline: 3px solid #ffffff; outline-offset: -3px; filter: brightness(1.25); }"
-    ".status-console { position: fixed; bottom: 0; left: 0; right: 0; background-color: #2a2a2a; "
-    "border-top: 2px solid #444; padding: 8px 11px; box-shadow: 0 -2px 8px rgba(0,0,0,0.5); }"
-    ".status-console h3 { margin: 0 0 6px 0; font-size: 11px; color: #888; text-align: center; }"
-    ".status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: 6px; "
-    "max-width: 1200px; margin: 0 auto; font-size: 9px; }"
-    ".status-item { background-color: #1a1a1a; padding: 5px 8px; border-radius: 3px; border: 1px solid #444; }"
-    ".status-item strong { color: #aaa; margin-right: 5px; }"
-    "</style></head>"
-    "<body><h1>BDX Control System ("
-  );
-  client.print(droidname);
-  client.print(")</h1>");
+void setupWebServer() {
+  // Main page (built once at startup, just streamed out here)
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *req) {
+    req->send(200, "text/html", pageHtml);
+  });
 
-  client.println("<h2>Emotes</h2><div class=\"button-grid\">");
-  for (int i = 0; i < numEmotes; i++) createButton(client, emotes[i]);
-  client.println("</div>");
+  // Action trigger — runs the requested droid action, returns minimal 200.
+  // State updates flow back to clients via SSE, so no body is needed.
+  server.on("^\\/maestro\\/(.+)$", HTTP_GET, [](AsyncWebServerRequest *req) {
+    String path = req->pathArg(0);
+    dispatchMaestroAction(path.c_str());
+    req->send(200, "text/plain", "OK");
+  });
 
-  client.println("<h2>Actions</h2><div class=\"button-grid\">");
-  for (int i = 0; i < numActions; i++) createButton(client, actions[i]);
-  client.println("</div>");
+  // Server-Sent Events endpoint — clients open once, receive pushes.
+  events.onConnect([](AsyncEventSourceClient *client) {
+    String json;
+    buildStatusJson(json);
+    client->send(json.c_str(), "message", millis());
+  });
+  server.addHandler(&events);
 
-  client.println("<h2>Eye Colors</h2><div class=\"button-grid\">");
-  for (int i = 0; i < numEyeColors; i++) createButton(client, eyeColors[i]);
-  client.println("</div>");
-
-  // Status console: static structure, values populated by JS polling
-  client.print(
-    "<div class=\"status-console\"><h3>System Status</h3><div class=\"status-grid\">"
-    "<div class=\"status-item\"><strong>Network:</strong> "
-  );
-  client.print(droidname);
-  client.print(
-    " (192.168.4.1)</div>"
-    "<div class=\"status-item\"><strong>Maestro:</strong> <span id=\"ms\">&mdash;</span></div>"
-    "<div class=\"status-item\"><strong>DFPlayer:</strong> <span id=\"ds\">&mdash;</span></div>"
-    "<div class=\"status-item\"><strong>Idle:</strong> <span id=\"im\">&mdash;</span></div>"
-    "<div class=\"status-item\"><strong>Status:</strong> <span id=\"ss\">&mdash;</span></div>"
-    "<div class=\"status-item\"><strong>Last:</strong> <span id=\"le\">&mdash;</span></div>"
-    "</div></div>"
-  );
-
-  // Embedded JS: AJAX click handler + 2s status polling + button highlighting
-  client.print(
-    "<script>"
-    "function hl(p,on){const b=document.querySelector('button[data-path=\"'+p+'\"]');if(b)b.classList.toggle('on',on);}"
-    "function r(d){if(!d)return;"
-    "document.getElementById('le').textContent=d.lastEmote;"
-    "document.getElementById('im').textContent=d.idle?'On':'Off';"
-    "document.getElementById('ms').textContent=d.maestro?'Connected':'Disabled';"
-    "document.getElementById('ds').textContent=d.dfplayer?'Connected':'Not Available';"
-    "document.getElementById('ss').textContent=d.status;"
-    "document.querySelectorAll('button.on').forEach(b=>b.classList.remove('on'));"
-    "if(d.currentEye)hl(d.currentEye,true);"
-    "if(d.idle)hl('idle_start',true);"
-    "if(d.flashlight)hl('flashlight',true);}"
-    "async function t(p){try{const x=await fetch('/maestro/'+p);r(await x.json());}catch(e){}}"
-    "async function q(){try{const x=await fetch('/status');r(await x.json());}catch(e){}}"
-    "setInterval(q,2000);q();"
-    "</script>"
-  );
-
-  client.println("</body></html>");
-  client.println();
+  server.begin();
 }
 
 void loop(){
@@ -592,6 +582,7 @@ void loop(){
         idleSequenceRunning = false;
         idleNextEmoteTime = millis() + random(IDLE_MIN_DELAY_MS, IDLE_MAX_DELAY_MS);
       }
+      pushStatus();  // Eye-color restored — notify subscribers
     }
   }
 
@@ -611,68 +602,12 @@ void loop(){
       idleSequenceRunning = false;
       idleNextEmoteTime = millis() + random(IDLE_MIN_DELAY_MS, IDLE_MAX_DELAY_MS);
     }
+    pushStatus();  // Idle fired a new emote — notify subscribers
   }
 
-  WiFiClient client = server.accept();   // Listen for incoming clients
-
-  if (client) {                             // If a new client connects,
-    client.setNoDelay(true);                // Disable Nagle's algorithm for faster response
-    currentTime = millis();
-    previousTime = currentTime;
-    #if DEBUG_MODE
-      Serial.println("New Client.");
-    #endif
-    headerLen = 0;
-    header[0] = '\0';
-    int currentLineLen = 0;                 // Track current line length (no String allocation)
-    while (client.connected() && currentTime - previousTime <= timeoutTime) {  // loop while the client's connected
-      currentTime = millis();
-      if (client.available()) {             // if there's bytes to read from the client,
-        char c = client.read();             // read a byte, then
-        // Only add to header if we haven't exceeded max size (leave room for null terminator)
-        if (headerLen < MAX_HEADER_SIZE - 1) {
-          header[headerLen++] = c;
-          header[headerLen] = '\0';
-        }
-        if (c == '\n') {                    // if the byte is a newline character
-          // if the current line is blank, you got two newline characters in a row.
-          // that's the end of the client HTTP request, so send a response:
-          if (currentLineLen == 0) {
-            // End of HTTP request — parse URL and dispatch
-            char url[MAX_PATH_SIZE];
-            if (parseRequestUrl(header, url, MAX_PATH_SIZE)) {
-              if (strncmp(url, "/maestro/", 9) == 0) {
-                dispatchMaestroAction(url + 9);
-                sendStatusJSON(client);
-              } else if (strcmp(url, "/status") == 0) {
-                sendStatusJSON(client);
-              } else if (strcmp(url, "/") == 0) {
-                sendPageHTML(client);
-              } else {
-                sendNotFound(client);
-              }
-            } else {
-              sendNotFound(client);
-            }
-            break;
-          } else { // if you got a newline, then reset the line counter
-            currentLineLen = 0;
-          }
-        } else if (c != '\r') {  // if you got anything else but a carriage return character,
-          currentLineLen++;       // count it toward the current line length
-        }
-      }
-    }
-    // Reset the header buffer
-    headerLen = 0;
-    header[0] = '\0';
-    // Close the connection (stop() handles flushing automatically)
-    client.stop();
-    #if DEBUG_MODE
-      Serial.println("Client disconnected.");
-      Serial.println("");
-    #endif
-  }
+  // HTTP handling lives in AsyncWebServer's own task; loop() just runs droid state.
+  // A small delay keeps the watchdog happy and yields to the WiFi/HTTP tasks.
+  delay(2);
 }
 
 // Helper function to scale color brightness for eyes
