@@ -60,25 +60,14 @@ HardwareSerial maestroSerial(MAESTRO_SERIAL_NUM);
 MiniMaestro maestro(maestroSerial);
 bool maestroAvailable = MAESTRO_ENABLED;  // Track if Maestro is available
 
-// Mutex guards every Maestro Serial1 access. AsyncWebServer dispatches run on a
-// separate FreeRTOS task and would otherwise race with the loop()-driven
-// getScriptStatus poll, corrupting the response.
-SemaphoreHandle_t maestroMutex = NULL;
-
-static uint8_t safeGetScriptStatus() {
-  if (!maestroMutex) return maestro.getScriptStatus();
-  xSemaphoreTake(maestroMutex, portMAX_DELAY);
-  uint8_t s = maestro.getScriptStatus();
-  xSemaphoreGive(maestroMutex);
-  return s;
-}
-
-static void safeRestartScript(uint8_t n) {
-  if (!maestroMutex) { maestro.restartScript(n); return; }
-  xSemaphoreTake(maestroMutex, portMAX_DELAY);
-  maestro.restartScript(n);
-  xSemaphoreGive(maestroMutex);
-}
+// Action queue: AsyncWebServer handlers enqueue requested paths; loop() drains
+// the queue and runs the actual dispatch. Keeps every hardware operation
+// (Maestro, LEDs, DFPlayer) single-threaded inside loop() so there is no
+// concurrent access between the async task and the main task.
+#define ACTION_PATH_MAX 32
+#define ACTION_QUEUE_DEPTH 8
+struct ActionMsg { char path[ACTION_PATH_MAX]; };
+QueueHandle_t actionQueue = NULL;
 
 // DFPlayer Mini library
 #include <DFRobotDFPlayerMini.h>
@@ -193,10 +182,12 @@ int idleShuffleIndex = 0;
 void setup() {
   Serial.begin(115200);
   
+  // Action queue (async handlers -> loop()) — sized for 8 buffered clicks.
+  actionQueue = xQueueCreate(ACTION_QUEUE_DEPTH, sizeof(ActionMsg));
+
   // Initialize Maestro Serial Connection
   if (maestroAvailable) {
     maestroSerial.begin(MAESTRO_BAUD, SERIAL_8N1, MAESTRO_RX_PIN, MAESTRO_TX_PIN);
-    maestroMutex = xSemaphoreCreateMutex();
     Serial.println("Maestro serial initialized");
   } else {
     Serial.println("Maestro disabled in configuration");
@@ -382,7 +373,7 @@ void triggerButton(const Button &button, bool fromIdle = false) {
         Serial.print("Activating maestro sequence ");
         Serial.println(button.scriptNumber);
       #endif
-      safeRestartScript(button.scriptNumber);
+      maestro.restartScript(button.scriptNumber);
     } else {
       // Always show errors/warnings
       Serial.println("Maestro script requested but Maestro not available");
@@ -627,11 +618,18 @@ void setupWebServer() {
   server.addHandler(&events);
 
   // Dynamic /maestro/<path> dispatcher. Handled via onNotFound to avoid
-  // depending on the ASYNCWEBSERVER_REGEX build flag.
+  // depending on the ASYNCWEBSERVER_REGEX build flag. The path is enqueued
+  // for loop() to actually execute; this keeps all hardware operations on a
+  // single thread (no Serial1/FastLED concurrency with the async task).
   server.onNotFound([](AsyncWebServerRequest *req) {
     const String &url = req->url();
     if (req->method() == HTTP_GET && url.startsWith("/maestro/")) {
-      dispatchMaestroAction(url.c_str() + 9);
+      if (actionQueue) {
+        ActionMsg msg;
+        strncpy(msg.path, url.c_str() + 9, ACTION_PATH_MAX - 1);
+        msg.path[ACTION_PATH_MAX - 1] = '\0';
+        xQueueSend(actionQueue, &msg, 0);  // non-blocking; drop if full
+      }
       req->send(200, "text/plain", "OK");
     } else {
       req->send(404, "text/plain", "Not Found");
@@ -642,10 +640,18 @@ void setupWebServer() {
 }
 
 void loop(){
+  // Drain any actions queued by the async HTTP task.
+  if (actionQueue) {
+    ActionMsg msg;
+    while (xQueueReceive(actionQueue, &msg, 0) == pdTRUE) {
+      dispatchMaestroAction(msg.path);
+    }
+  }
+
   // Restore eye color once the emote servo sequence finishes (rate-limited polling)
   if (pendingColorRestore && maestroAvailable && (millis() - lastScriptStatusCheck >= SCRIPT_STATUS_POLL_MS)) {
     lastScriptStatusCheck = millis();
-    if (safeGetScriptStatus() == 1) {  // 1 = script stopped
+    if (maestro.getScriptStatus() == 1) {  // 1 = script stopped
       noInterrupts();
       leds[0] = preEmoteColor;
       leds[1] = preEmoteColor;

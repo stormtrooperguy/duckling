@@ -723,9 +723,9 @@ For issues or questions:
 
 ## Version History
 
-- **v1.11**: Bug fix — eye color now reliably restores after emote sequences.
-  - Latent race condition since the v1.7 async-server migration: `AsyncWebServer` handlers run on a separate FreeRTOS task and were calling `maestro.restartScript()` (Serial1 write) concurrently with the `loop()`-driven `maestro.getScriptStatus()` poll (Serial1 write + read). Collisions on Serial1 corrupted the status response, so the "script stopped" condition rarely matched and the restore never fired.
-  - Fix: added `maestroMutex` (FreeRTOS mutex) and routed all Maestro calls through `safeGetScriptStatus()` / `safeRestartScript()` wrappers. Both threads now serialize their Maestro access.
+- **v1.11**: Bug fix — eye color now reliably restores after emote sequences (action queue architecture).
+  - Latent race condition since the v1.7 async-server migration: `AsyncWebServer` handlers run on a separate FreeRTOS task and were calling Maestro / FastLED operations concurrently with `loop()`. Caused garbled `getScriptStatus()` responses (no restore) and, in some configurations, full crashes due to stack pressure in the async task.
+  - Fix: action queue. The async handler enqueues the requested path (`ActionMsg` of fixed size) and returns immediately; `loop()` drains the queue and runs `dispatchMaestroAction()` itself. All Maestro, FastLED, and DFPlayer operations are now single-threaded inside `loop()` — no possibility of concurrent hardware access. State updates still flow back to the UI via SSE the moment `loop()` processes the action.
 
 - **v1.10**: Round buttons + warmer orange
   - Emote and eye-color buttons are now circles (`border-radius: 50%` + `aspect-ratio: 1/1`) on a fixed-width grid. Larger, easier touch targets that visually distinguish actions from the rectangular toggles.
