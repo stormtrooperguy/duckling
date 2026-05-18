@@ -60,6 +60,26 @@ HardwareSerial maestroSerial(MAESTRO_SERIAL_NUM);
 MiniMaestro maestro(maestroSerial);
 bool maestroAvailable = MAESTRO_ENABLED;  // Track if Maestro is available
 
+// Mutex guards every Maestro Serial1 access. AsyncWebServer dispatches run on a
+// separate FreeRTOS task and would otherwise race with the loop()-driven
+// getScriptStatus poll, corrupting the response.
+SemaphoreHandle_t maestroMutex = NULL;
+
+static uint8_t safeGetScriptStatus() {
+  if (!maestroMutex) return maestro.getScriptStatus();
+  xSemaphoreTake(maestroMutex, portMAX_DELAY);
+  uint8_t s = maestro.getScriptStatus();
+  xSemaphoreGive(maestroMutex);
+  return s;
+}
+
+static void safeRestartScript(uint8_t n) {
+  if (!maestroMutex) { maestro.restartScript(n); return; }
+  xSemaphoreTake(maestroMutex, portMAX_DELAY);
+  maestro.restartScript(n);
+  xSemaphoreGive(maestroMutex);
+}
+
 // DFPlayer Mini library
 #include <DFRobotDFPlayerMini.h>
 HardwareSerial dfPlayerSerial(DFPLAYER_SERIAL_NUM);
@@ -176,6 +196,7 @@ void setup() {
   // Initialize Maestro Serial Connection
   if (maestroAvailable) {
     maestroSerial.begin(MAESTRO_BAUD, SERIAL_8N1, MAESTRO_RX_PIN, MAESTRO_TX_PIN);
+    maestroMutex = xSemaphoreCreateMutex();
     Serial.println("Maestro serial initialized");
   } else {
     Serial.println("Maestro disabled in configuration");
@@ -361,7 +382,7 @@ void triggerButton(const Button &button, bool fromIdle = false) {
         Serial.print("Activating maestro sequence ");
         Serial.println(button.scriptNumber);
       #endif
-      maestro.restartScript(button.scriptNumber);
+      safeRestartScript(button.scriptNumber);
     } else {
       // Always show errors/warnings
       Serial.println("Maestro script requested but Maestro not available");
@@ -624,7 +645,7 @@ void loop(){
   // Restore eye color once the emote servo sequence finishes (rate-limited polling)
   if (pendingColorRestore && maestroAvailable && (millis() - lastScriptStatusCheck >= SCRIPT_STATUS_POLL_MS)) {
     lastScriptStatusCheck = millis();
-    if (maestro.getScriptStatus() == 1) {  // 1 = script stopped
+    if (safeGetScriptStatus() == 1) {  // 1 = script stopped
       noInterrupts();
       leds[0] = preEmoteColor;
       leds[1] = preEmoteColor;
