@@ -133,7 +133,7 @@ const Button eyeColors[] = {
   // path           label      emoji  colorName  LED1&2 color      LED3 color    preserve12 preserve3 script# mp3#
   {"color_white",   "white",   "",    "White",   CRGB::White,      CRGB::Black,  false,     true,     -1,     -1},
   {"color_yellow",  "yellow",  "",    "Yellow",  CRGB::Yellow,     CRGB::Black,  false,     true,     -1,     -1},
-  {"color_orange",  "orange",  "",    "Orange",  CRGB::DarkOrange, CRGB::Black,  false,     true,     -1,     -1},
+  {"color_orange",  "orange",  "",    "Orange",  CRGB(255,126,0),  CRGB::Black,  false,     true,     -1,     -1},
   {"color_green",   "green",   "",    "Green",   CRGB::Green,      CRGB::Black,  false,     true,     -1,     -1},
   {"color_red",     "red",     "",    "Red",     CRGB::Red,        CRGB::Black,  false,     true,     -1,     -1},
   {"color_blue",    "blue",    "",    "Blue",    CRGB::Blue,       CRGB::Black,  false,     true,     -1,     -1},
@@ -201,8 +201,8 @@ void setup() {
   FastLED.show();
   
   // Set initial eye color to orange (startup state)
-  leds[0] = scaleEyeColor(CRGB::DarkOrange);  // LED 1 (eye) - dimmed for comfort
-  leds[1] = scaleEyeColor(CRGB::DarkOrange);  // LED 2 (eye) - dimmed for comfort
+  leds[0] = scaleEyeColor(CRGB(255,126,0));  // LED 1 (eye) - dimmed for comfort
+  leds[1] = scaleEyeColor(CRGB(255,126,0));  // LED 2 (eye) - dimmed for comfort
   leds[2] = CRGB::Black;                   // LED 3 (flashlight off)
   FastLED.show();
   lastEmote = "orange (startup)";

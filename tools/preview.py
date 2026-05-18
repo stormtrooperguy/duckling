@@ -40,7 +40,7 @@ EMOTES = [
 EYE_COLORS = [
     ("color_white",   "white",   "#FFFFFF"),
     ("color_yellow",  "yellow",  "#FFFF00"),
-    ("color_orange",  "orange",  "#FF8C00"),  # CRGB::DarkOrange
+    ("color_orange",  "orange",  "#FF7E00"),  # CRGB(255,126,0) — DarkOrange minus 10% green
     ("color_green",   "green",   "#00FF00"),
     ("color_red",     "red",     "#FF0000"),
     ("color_blue",    "blue",    "#0000FF"),
