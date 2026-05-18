@@ -117,18 +117,18 @@ html {{ font-family: Helvetica, Arial, sans-serif; }}
 body {{ background-color: #1a1a1a; color: #ffffff; padding: 11px; padding-bottom: 78px; }}
 h1 {{ text-align: center; margin-bottom: 15px; font-size: 24px; }}
 h2 {{ text-align: center; margin: 15px 0 8px 0; font-size: 17px; color: #aaa; }}
-.button-grid {{ display: grid; grid-template-columns: repeat(auto-fit, 110px); gap: 12px;
-max-width: 1200px; margin: 0 auto 18px auto; justify-content: center; }}
+.button-grid {{ display: grid; grid-template-columns: repeat(auto-fit, 88px); gap: 10px;
+max-width: 1200px; margin: 0 auto 16px auto; justify-content: center; }}
 .button {{ background-color: {DROID_COLOR}; border: none; border-radius: 50%; aspect-ratio: 1 / 1;
-color: white; padding: 8px; font-family: inherit; font-size: 13px; font-weight: bold;
+color: white; padding: 6px; font-family: inherit; font-size: 12px; font-weight: bold;
 cursor: pointer; transition: all 0.3s; text-align: center; box-shadow: 0 3px 5px rgba(0,0,0,0.3);
 display: flex; align-items: center; justify-content: center; }}
 .button:hover {{ transform: translateY(-2px); box-shadow: 0 5px 9px rgba(0,0,0,0.4); opacity: 0.9; }}
 .button:active {{ transform: translateY(0); box-shadow: 0 2px 3px rgba(0,0,0,0.3); }}
 .button.on {{ outline: 3px solid #ffffff; outline-offset: -3px; filter: brightness(1.25); }}
-.button.emote {{ flex-direction: column; gap: 4px; padding: 8px 6px; }}
-.button.emote .emoji {{ font-size: 34px; line-height: 1; }}
-.button.emote .elabel {{ font-size: 11px; font-weight: normal; opacity: 0.85; }}
+.button.emote {{ flex-direction: column; gap: 3px; padding: 6px 4px; }}
+.button.emote .emoji {{ font-size: 28px; line-height: 1; }}
+.button.emote .elabel {{ font-size: 10px; font-weight: normal; opacity: 0.85; }}
 .toggle-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; max-width: 1200px; margin: 0 auto 15px auto; }}
 .toggle {{ background-color: #2a2a2a; border: 1px solid #444; border-radius: 6px; padding: 12px 16px;
 cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 12px;
