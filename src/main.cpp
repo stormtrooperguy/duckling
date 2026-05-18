@@ -135,6 +135,7 @@ const Button eyeColors[] = {
   // path          label           colorName  LED1&2 color   LED3 color      preserve12  preserve3  script# mp3#
   {"color_white",  "white",        "White",   CRGB::White,   CRGB::Black,    false,      true,      -1,     -1},
   {"color_yellow", "yellow",       "Yellow",  CRGB::Yellow,  CRGB::Black,    false,      true,      -1,     -1},
+  {"color_orange", "orange",       "Orange",  CRGB::Orange,  CRGB::Black,    false,      true,      -1,     -1},
   {"color_green",  "green",        "Green",   CRGB::Green,   CRGB::Black,    false,      true,      -1,     -1},
   {"color_red",    "red",          "Red",     CRGB::Red,     CRGB::Black,    false,      true,      -1,     -1},
   {"color_blue",   "blue",         "Blue",    CRGB::Blue,    CRGB::Black,    false,      true,      -1,     -1},
@@ -163,8 +164,8 @@ unsigned long lastScriptStatusCheck = 0;
 
 // Current eye state — path of whichever button matches the current LEDs 1&2.
 // Used to highlight the active button in the web UI.
-const char* currentEye = "color_yellow";   // matches startup color
-const char* preEmotePath = "color_yellow"; // saved for restore alongside preEmoteColor
+const char* currentEye = "color_orange";   // matches startup color
+const char* preEmotePath = "color_orange"; // saved for restore alongside preEmoteColor
 
 // Idle mode state
 bool idleMode = false;
@@ -210,13 +211,13 @@ void setup() {
   FastLED.clear();
   FastLED.show();
   
-  // Set initial eye color to yellow (startup state)
-  leds[0] = scaleEyeColor(CRGB::Yellow);  // LED 1 (eye) - dimmed for comfort
-  leds[1] = scaleEyeColor(CRGB::Yellow);  // LED 2 (eye) - dimmed for comfort
+  // Set initial eye color to orange (startup state)
+  leds[0] = scaleEyeColor(CRGB::Orange);  // LED 1 (eye) - dimmed for comfort
+  leds[1] = scaleEyeColor(CRGB::Orange);  // LED 2 (eye) - dimmed for comfort
   leds[2] = CRGB::Black;                   // LED 3 (flashlight off)
   FastLED.show();
-  lastEmote = "yellow (startup)";
-  Serial.println("Eyes initialized to yellow (brightness 50)");
+  lastEmote = "orange (startup)";
+  Serial.println("Eyes initialized to orange (brightness 50)");
 
   // Configure Access Point
   Serial.println("Configuring Access Point...");

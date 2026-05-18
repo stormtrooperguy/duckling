@@ -14,7 +14,7 @@ A web-based control system for animatronic droids using ESP32, featuring LED eye
 - **Eye Color Restore**: After each emote sequence finishes, eyes automatically return to the color they were before the emote
 - **Idle Mode**: Autonomous mode that cycles through emotes in random order with natural timing delays, making the droid look active when not being puppeteered
 - **Actions System**: Utility functions (like flashlight toggle and idle mode) that preserve eye state
-- **Eye Colors System**: Quick eye color changes without servo movements (6 colors available)
+- **Eye Colors System**: Quick eye color changes without servo movements (7 colors available)
 - **Performance Optimized**: Fast HTTP response (~200-400ms) with optional debug mode for development
 
 ## Hardware Requirements
@@ -235,7 +235,7 @@ The brightness is applied automatically through scaling functions:
 1. Flash the firmware: `pio run --target upload`
 2. Open the serial monitor: `pio device monitor` (115200 baud)
 3. ESP32 will create a WiFi access point
-4. **Eyes automatically turn yellow on startup**
+4. **Eyes automatically turn orange on startup**
 
 ### Connecting
 
@@ -302,6 +302,7 @@ Eye colors change only the eye LEDs without triggering servos (preserves flashli
 |-------|-----------|-------|-------|-------------|
 | **white** | White | Preserved | No | Set eyes to white |
 | **yellow** | Yellow | Preserved | No | Set eyes to yellow |
+| **orange** | Orange | Preserved | No | Set eyes to orange |
 | **green** | Green | Preserved | No | Set eyes to green |
 | **red** | Red | Preserved | No | Set eyes to red |
 | **blue** | Blue | Preserved | No | Set eyes to blue |
@@ -595,7 +596,7 @@ Monitor debugging info at 115200 baud:
 Maestro serial initialized
 Initializing DFPlayer...
 DFPlayer initialized successfully
-Eyes initialized to yellow (brightness 50)
+Eyes initialized to orange (brightness 50)
 Configuring Access Point...
 Access Point started!
 SSID: YourDroidName
@@ -722,6 +723,8 @@ For issues or questions:
 4. Check power supply is adequate
 
 ## Version History
+
+- **v1.6**: Added orange to the eye color palette and made it the new startup default (was yellow). Total eye color options: 7.
 
 - **v1.5**: Migrated to PlatformIO
   - Added `platformio.ini` with pinned library versions

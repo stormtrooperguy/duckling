@@ -42,6 +42,7 @@ ACTIONS = [
 EYE_COLORS = [
     ("color_white",  "white"),
     ("color_yellow", "yellow"),
+    ("color_orange", "orange"),
     ("color_green",  "green"),
     ("color_red",    "red"),
     ("color_blue",   "blue"),
@@ -50,12 +51,12 @@ EYE_COLORS = [
 
 # In-memory state — what the ESP32 would track.
 state = {
-    "lastEmote": "yellow (startup)",
+    "lastEmote": "orange (startup)",
     "idle": False,
     "maestro": True,
     "dfplayer": True,
     "flashlight": False,
-    "currentEye": "color_yellow",
+    "currentEye": "color_orange",
     "status": "Ready (emulated)",
 }
 
