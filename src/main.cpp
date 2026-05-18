@@ -547,14 +547,6 @@ void setupWebServer() {
     req->send(200, "text/html", pageHtml);
   });
 
-  // Action trigger — runs the requested droid action, returns minimal 200.
-  // State updates flow back to clients via SSE, so no body is needed.
-  server.on("^\\/maestro\\/(.+)$", HTTP_GET, [](AsyncWebServerRequest *req) {
-    String path = req->pathArg(0);
-    dispatchMaestroAction(path.c_str());
-    req->send(200, "text/plain", "OK");
-  });
-
   // Server-Sent Events endpoint — clients open once, receive pushes.
   events.onConnect([](AsyncEventSourceClient *client) {
     String json;
@@ -562,6 +554,18 @@ void setupWebServer() {
     client->send(json.c_str(), "message", millis());
   });
   server.addHandler(&events);
+
+  // Dynamic /maestro/<path> dispatcher. Handled via onNotFound to avoid
+  // depending on the ASYNCWEBSERVER_REGEX build flag.
+  server.onNotFound([](AsyncWebServerRequest *req) {
+    const String &url = req->url();
+    if (req->method() == HTTP_GET && url.startsWith("/maestro/")) {
+      dispatchMaestroAction(url.c_str() + 9);
+      req->send(200, "text/plain", "OK");
+    } else {
+      req->send(404, "text/plain", "Not Found");
+    }
+  });
 
   server.begin();
 }
