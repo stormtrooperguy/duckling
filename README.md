@@ -723,6 +723,10 @@ For issues or questions:
 
 ## Version History
 
+- **v1.10**: Round buttons + warmer orange
+  - Emote and eye-color buttons are now circles (`border-radius: 50%` + `aspect-ratio: 1/1`) on a fixed-width grid. Larger, easier touch targets that visually distinguish actions from the rectangular toggles.
+  - Orange shifted again — now `CRGB::DarkOrange` (255, 140, 0). Was `CRGB(255, 150, 0)` in v1.9, was too yellow.
+
 - **v1.9**: Operator UX polish
   - Emote buttons now render as large emoji with a small text label below (😠 angry, 🤔 curious, 😊 happy, 👎 no, 😢 sad, 😨 scared, 😴 sleep, 🌅 wake, 👍 yes). HTML response now declares UTF-8 charset.
   - Each eye-color button is painted in its target color; label text auto-flips to dark for light backgrounds (white, yellow) so it stays legible.

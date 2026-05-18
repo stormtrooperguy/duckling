@@ -133,7 +133,7 @@ const Button eyeColors[] = {
   // path           label      emoji  colorName  LED1&2 color      LED3 color    preserve12 preserve3 script# mp3#
   {"color_white",   "white",   "",    "White",   CRGB::White,      CRGB::Black,  false,     true,     -1,     -1},
   {"color_yellow",  "yellow",  "",    "Yellow",  CRGB::Yellow,     CRGB::Black,  false,     true,     -1,     -1},
-  {"color_orange",  "orange",  "",    "Orange",  CRGB(255,150,0),  CRGB::Black,  false,     true,     -1,     -1},
+  {"color_orange",  "orange",  "",    "Orange",  CRGB::DarkOrange, CRGB::Black,  false,     true,     -1,     -1},
   {"color_green",   "green",   "",    "Green",   CRGB::Green,      CRGB::Black,  false,     true,     -1,     -1},
   {"color_red",     "red",     "",    "Red",     CRGB::Red,        CRGB::Black,  false,     true,     -1,     -1},
   {"color_blue",    "blue",    "",    "Blue",    CRGB::Blue,       CRGB::Black,  false,     true,     -1,     -1},
@@ -201,8 +201,8 @@ void setup() {
   FastLED.show();
   
   // Set initial eye color to orange (startup state)
-  leds[0] = scaleEyeColor(CRGB(255,150,0));  // LED 1 (eye) - dimmed for comfort
-  leds[1] = scaleEyeColor(CRGB(255,150,0));  // LED 2 (eye) - dimmed for comfort
+  leds[0] = scaleEyeColor(CRGB::DarkOrange);  // LED 1 (eye) - dimmed for comfort
+  leds[1] = scaleEyeColor(CRGB::DarkOrange);  // LED 2 (eye) - dimmed for comfort
   leds[2] = CRGB::Black;                   // LED 3 (flashlight off)
   FastLED.show();
   lastEmote = "orange (startup)";
@@ -427,17 +427,19 @@ void buildPageHtml(String &out) {
         "body { background-color: #1a1a1a; color: #ffffff; padding: 11px; padding-bottom: 78px; }"
         "h1 { text-align: center; margin-bottom: 15px; font-size: 24px; }"
         "h2 { text-align: center; margin: 15px 0 8px 0; font-size: 17px; color: #aaa; }"
-        ".button-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: 8px; max-width: 1200px; margin: 0 auto 15px auto; }"
+        ".button-grid { display: grid; grid-template-columns: repeat(auto-fit, 110px); gap: 12px;"
+        "max-width: 1200px; margin: 0 auto 18px auto; justify-content: center; }"
         ".button { background-color: ";
   out += droidcolor;
-  out += "; border: none; border-radius: 6px; color: white; padding: 15px 11px;"
-         "font-family: inherit; font-size: 15px; font-weight: bold; cursor: pointer;"
-         "transition: all 0.3s; text-align: center; box-shadow: 0 3px 5px rgba(0,0,0,0.3); }"
+  out += "; border: none; border-radius: 50%; aspect-ratio: 1 / 1;"
+         "color: white; padding: 8px; font-family: inherit; font-size: 13px; font-weight: bold;"
+         "cursor: pointer; transition: all 0.3s; text-align: center; box-shadow: 0 3px 5px rgba(0,0,0,0.3);"
+         "display: flex; align-items: center; justify-content: center; }"
          ".button:hover { transform: translateY(-2px); box-shadow: 0 5px 9px rgba(0,0,0,0.4); opacity: 0.9; }"
          ".button:active { transform: translateY(0); box-shadow: 0 2px 3px rgba(0,0,0,0.3); }"
          ".button.on { outline: 3px solid #ffffff; outline-offset: -3px; filter: brightness(1.25); }"
-         ".button.emote { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px; }"
-         ".button.emote .emoji { font-size: 30px; line-height: 1; }"
+         ".button.emote { flex-direction: column; gap: 4px; padding: 8px 6px; }"
+         ".button.emote .emoji { font-size: 34px; line-height: 1; }"
          ".button.emote .elabel { font-size: 11px; font-weight: normal; opacity: 0.85; }"
          ".toggle-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; max-width: 1200px; margin: 0 auto 15px auto; }"
          ".toggle { background-color: #2a2a2a; border: 1px solid #444; border-radius: 6px; padding: 12px 16px;"
