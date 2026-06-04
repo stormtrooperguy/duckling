@@ -34,24 +34,32 @@ COMPLETE SYSTEM OVERVIEW
 DETAILED COMPONENT CONNECTIONS
 ================================
 
-1. LED STRIP (WS2812B - 3 LEDs)
-   ===============================
-   
-   ┌──────────────┐
-   │  LED STRIP   │
-   │  (3x LEDs)   │
-   └──┬───┬───┬───┘
-      │   │   │
-   DIN│ 5V│ GND
-      │   │   │
-      │   │   │        ┌─────────────────┐
-      │   │   └────────┤ GND             │
-      │   └────────────┤ 5V (or 3.3V)    │
-      └────────────────┤ GPIO 5 (DATA)   │  ESP32
-                       └─────────────────┘
+1. LED STRIP (WS2812B - 4 LEDs: 1 inline repeater + 3 in head)
+   ===============================================================
+
+   Chain order (DIN flows left-to-right):
+
+   ┌──────────┐    ┌──────────────────────────────┐
+   │ REPEATER │    │  HEAD                        │
+   │ (off)    │───▶│  Eye 1 ─▶ Eye 2 ─▶ Flashlight│
+   └────┬─────┘    └──────────────────────────────┘
+        │ DIN of first LED (repeater)
+        │
+        │           ┌─────────────────┐
+        │           │ GND ◀── common ground with 5V supply
+        │           │ GPIO 5 (DATA)   │  ESP32
+        └───────────┤                 │
+                    └─────────────────┘
+
+   Power (all 4 pixels): 5V and GND from the regulated 5V supply,
+   with that supply's GND bonded to ESP32 GND.
 
    Notes:
-   - WS2812B can run on 3.3V or 5V
+   - WS2812B can run on 3.3V or 5V; this build uses 5V external supply
+   - The repeater pixel sits as close to the controller as practical,
+     then a single long data wire runs to the head. Its job is to
+     re-clock the WS2812 data stream so the head pixels see a clean
+     signal; firmware holds it black at all times.
    - Add 470Ω resistor on data line if using 5V LEDs with 3.3V logic
    - Add 1000µF capacitor across 5V/GND for power stability
 
@@ -200,7 +208,8 @@ For initial testing with USB power (LEDs and web interface only):
 Notes for USB testing:
 - Set MAESTRO_ENABLED false in code
 - Connect LED strip to ESP32 5V pin (NOT VIN)
-- USB can provide ~500mA - sufficient for 3 LEDs + DFPlayer
+- USB can provide ~500mA - sufficient for 4 LEDs + DFPlayer
+  (the repeater pixel is held off in firmware, ~1mA quiescent)
 - DO NOT connect servos when using USB power!
 
 

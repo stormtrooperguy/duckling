@@ -79,7 +79,15 @@ bool dfPlayerAvailable = false;     // Track if DFPlayer initialized successfull
 #include <FastLED.h>
 
 // LED Strip Configuration
-#define NUM_LEDS 3
+// The chain has 4 pixels total: an inline repeater pixel near the controller
+// (always off; acts as a signal repeater to clean up the data line before it
+// reaches the head), followed by the two eye LEDs and the flashlight LED.
+// Always address pixels by these named indices, never by raw integers.
+#define NUM_LEDS 4
+#define REPEATER_LED   0  // Inline signal-repeater pixel (always off)
+#define EYE_LED_1      1  // Eye 1
+#define EYE_LED_2      2  // Eye 2 (always kept in sync with EYE_LED_1)
+#define FLASHLIGHT_LED 3  // Flashlight
 #define LED_PIN 5  // Change this to your desired GPIO pin
 #define LED_TYPE WS2812B
 #define COLOR_ORDER GRB
@@ -213,9 +221,10 @@ void setup() {
   FastLED.show();
   
   // Set initial eye color to orange (startup state)
-  leds[0] = scaleEyeColor(CRGB(255,100,0));  // LED 1 (eye) - dimmed for comfort
-  leds[1] = scaleEyeColor(CRGB(255,100,0));  // LED 2 (eye) - dimmed for comfort
-  leds[2] = CRGB::Black;                   // LED 3 (flashlight off)
+  leds[REPEATER_LED] = CRGB::Black;                       // Inline repeater - always off
+  leds[EYE_LED_1] = scaleEyeColor(CRGB(255,100,0));       // Eye 1 - dimmed for comfort
+  leds[EYE_LED_2] = scaleEyeColor(CRGB(255,100,0));       // Eye 2 - dimmed for comfort
+  leds[FLASHLIGHT_LED] = CRGB::Black;                     // Flashlight off
   FastLED.show();
   lastEmote = "orange (startup)";
   Serial.println("Eyes initialized to orange (brightness 50)");
@@ -266,7 +275,7 @@ void buildStatusJson(String &out) {
   out += ",\"dfplayer\":";
   out += (dfPlayerAvailable ? "true" : "false");
   out += ",\"flashlight\":";
-  out += (leds[2] != CRGB::Black ? "true" : "false");
+  out += (leds[FLASHLIGHT_LED] != CRGB::Black ? "true" : "false");
   out += ",\"currentEye\":\"";
   out += currentEye;
   out += "\",\"status\":\"";
@@ -282,20 +291,20 @@ void pushStatus() {
   events.send(json.c_str(), "message", millis());
 }
 
-// Safety function to ensure eyes (LEDs 1 & 2) are always synchronized
+// Safety function to ensure eyes are always synchronized
 void verifyEyeSync() {
-  if (leds[0] != leds[1]) {
+  if (leds[EYE_LED_1] != leds[EYE_LED_2]) {
     #if DEBUG_MODE
       Serial.println("WARNING: Eye LEDs out of sync! Forcing synchronization.");
-      Serial.print("LED 0: R="); Serial.print(leds[0].r); 
-      Serial.print(" G="); Serial.print(leds[0].g); 
-      Serial.print(" B="); Serial.println(leds[0].b);
-      Serial.print("LED 1: R="); Serial.print(leds[1].r); 
-      Serial.print(" G="); Serial.print(leds[1].g); 
-      Serial.print(" B="); Serial.println(leds[1].b);
+      Serial.print("Eye 1: R="); Serial.print(leds[EYE_LED_1].r);
+      Serial.print(" G="); Serial.print(leds[EYE_LED_1].g);
+      Serial.print(" B="); Serial.println(leds[EYE_LED_1].b);
+      Serial.print("Eye 2: R="); Serial.print(leds[EYE_LED_2].r);
+      Serial.print(" G="); Serial.print(leds[EYE_LED_2].g);
+      Serial.print(" B="); Serial.println(leds[EYE_LED_2].b);
     #endif
-    // Force both eyes to match LED 0
-    leds[1] = leds[0];
+    // Force eye 2 to match eye 1
+    leds[EYE_LED_2] = leds[EYE_LED_1];
   }
 }
 
@@ -328,21 +337,21 @@ void triggerButton(const Button &button, bool fromIdle = false) {
   if (!button.preserveLED12) {
     if (button.scriptNumber >= 0 && maestroAvailable) {
       // Emote with servo sequence: save current state to restore after sequence ends
-      preEmoteColor = leds[0];
+      preEmoteColor = leds[EYE_LED_1];
       preEmotePath = currentEye;
       pendingColorRestore = true;
     } else {
       // Explicit eye color change: cancel any pending restore
       pendingColorRestore = false;
     }
-    leds[0] = eyeColor;  // LED 1 (dimmed for eye comfort)
-    leds[1] = eyeColor;  // LED 2 (always same as LED 1)
+    leds[EYE_LED_1] = eyeColor;  // Eye 1 (dimmed for eye comfort)
+    leds[EYE_LED_2] = eyeColor;  // Eye 2 (always same as Eye 1)
     currentEye = button.path;
   }
-  
-  // Only update LED 3 if not preserving its state
+
+  // Only update flashlight if not preserving its state
   if (!button.preserveLED3) {
-    leds[2] = flashlightColor;  // LED 3 (full brightness for flashlight)
+    leds[FLASHLIGHT_LED] = flashlightColor;  // Flashlight (full brightness)
   }
   
   interrupts();  // Re-enable interrupts
@@ -549,12 +558,12 @@ void dispatchMaestroAction(const char* path) {
   bool handled = false;
   if (strcmp(path, "flashlight") == 0) {
     noInterrupts();
-    bool isOff = (leds[2] == CRGB::Black);
+    bool isOff = (leds[FLASHLIGHT_LED] == CRGB::Black);
     if (isOff) {
-      leds[2] = scaleFlashlightColor(CRGB::White);
+      leds[FLASHLIGHT_LED] = scaleFlashlightColor(CRGB::White);
       lastEmote = "flashlight on";
     } else {
-      leds[2] = CRGB::Black;
+      leds[FLASHLIGHT_LED] = CRGB::Black;
       lastEmote = "flashlight off";
     }
     interrupts();
@@ -653,8 +662,8 @@ void loop(){
     lastScriptStatusCheck = millis();
     if (maestro.getScriptStatus() == 1) {  // 1 = script stopped
       noInterrupts();
-      leds[0] = preEmoteColor;
-      leds[1] = preEmoteColor;
+      leds[EYE_LED_1] = preEmoteColor;
+      leds[EYE_LED_2] = preEmoteColor;
       interrupts();
       FastLED.show();
       currentEye = preEmotePath;

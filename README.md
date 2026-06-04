@@ -6,7 +6,7 @@ A web-based control system for animatronic droids using ESP32, featuring LED eye
 
 - **WiFi Access Point**: ESP32 creates its own WiFi network for direct device control
 - **Web Interface**: Responsive landscape-optimized interface for 8" tablets with fast response times
-- **LED Eye Control**: 3 addressable LEDs (WS2812B/NeoPixel) with per-LED brightness (eyes dimmed for comfort, flashlight at max)
+- **LED Eye Control**: 3 addressable LEDs in the head (WS2812B/NeoPixel) with per-LED brightness (eyes dimmed for comfort, flashlight at max), plus an inline signal-repeater pixel near the controller
 - **Servo Control**: Optional integration with Pololu Maestro for complex servo sequences
 - **Sound Effects**: Optional DFPlayer Mini for MP3 audio playback
 - **Modular Design**: Run with any combination of components (LEDs only, LEDs + Servos, full system)
@@ -21,7 +21,7 @@ A web-based control system for animatronic droids using ESP32, featuring LED eye
 
 ### Core Components
 - **ESP32 Development Board**
-- **3x WS2812B/NeoPixel LEDs** (addressable RGB LEDs)
+- **4x WS2812B/NeoPixel LEDs** (addressable RGB LEDs): 3 in the head (2 eyes + 1 flashlight) plus 1 inline repeater pixel placed near the controller end of the long data run, used to clean up the data signal before it reaches the head. The repeater pixel is held off in firmware and isn't visible in normal operation.
 - **Pololu Maestro Servo Controller** (Mini Maestro) - optional, can be disabled
 - **DFPlayer Mini MP3 Module** - optional, auto-detected
 - **MicroSD Card** (for DFPlayer, if using audio)
@@ -52,10 +52,12 @@ A web-based control system for animatronic droids using ESP32, featuring LED eye
 
 ### LED Strip (WS2812B)
 ```
-ESP32 GPIO 5 → LED Data In
-ESP32 GND     → LED GND
+ESP32 GPIO 5 → Repeater LED Data In → Eye 1 → Eye 2 → Flashlight
+ESP32 GND     → LED GND (common ground with 5V supply)
 5V Power      → LED VCC
 ```
+
+The chain order matters: the first pixel in the chain is the **inline repeater** placed near the controller. It exists purely to re-drive the data signal before the long run to the head, and is held off in firmware. The remaining three pixels are in the head, in order: Eye 1, Eye 2, Flashlight.
 
 ### Pololu Maestro (Serial1)
 ```
@@ -124,7 +126,11 @@ String droidcolor = "green";         // Button color (CSS color name)
 const char* ap_password = "CHANGE_ME_12345";  // WiFi password (8-63 chars) - CHANGE THIS!
 
 // LED Configuration
-#define NUM_LEDS 3        // Number of LEDs
+#define NUM_LEDS 4        // 1 inline repeater + 3 in head (2 eyes + flashlight)
+#define REPEATER_LED   0  // Inline signal-repeater pixel (always off)
+#define EYE_LED_1      1  // Eye 1
+#define EYE_LED_2      2  // Eye 2 (always kept in sync with EYE_LED_1)
+#define FLASHLIGHT_LED 3  // Flashlight
 #define LED_PIN 5         // Data pin for LED strip
 #define LED_TYPE WS2812B  // LED chip type
 ```
@@ -665,10 +671,11 @@ This system is designed to run from an **18V battery** with buck converters:
 
 **5V Rail (from first buck converter):**
 - **ESP32**: ~500mA (WiFi active)
-- **LED Strip**: 
+- **LED Strip**:
+  - Repeater (1 LED held off): ~1mA quiescent
   - Eyes (2 LEDs at brightness 50): ~24mA
   - Flashlight (1 LED at max brightness 255): ~60mA
-  - **Total LEDs**: ~84mA typical
+  - **Total LEDs**: ~85mA typical
 - **DFPlayer**: ~50mA
 - **Total 5V**: ~650mA typical (recommend 2A+ converter for headroom)
 
@@ -722,6 +729,10 @@ For issues or questions:
 4. Check power supply is adequate
 
 ## Version History
+
+- **v1.12**: Inline signal-repeater pixel
+  - Added a 4th pixel at the head of the chain (index 0) that acts as a hardware signal repeater for the long data run between the controller and the head LEDs. Symptoms before: intermittent flicker / wrong colors with no fix from cable changes or a series resistor on the data line. With the repeater inline, the WS2812 reshapes and re-clocks the data stream before it reaches the head pixels.
+  - Firmware change: `NUM_LEDS` 3 → 4. The repeater is initialized to `CRGB::Black` in `setup()` and never touched again. All other LED accesses now go through named index constants (`REPEATER_LED`, `EYE_LED_1`, `EYE_LED_2`, `FLASHLIGHT_LED`) rather than bare integers, so the chain order is self-documenting and future shifts won't require hunting down magic indices.
 
 - **v1.11**: Bug fix — eye color now reliably restores after emote sequences (action queue architecture).
   - Latent race condition since the v1.7 async-server migration: `AsyncWebServer` handlers run on a separate FreeRTOS task and were calling Maestro / FastLED operations concurrently with `loop()`. Caused garbled `getScriptStatus()` responses (no restore) and, in some configurations, full crashes due to stack pressure in the async task.
