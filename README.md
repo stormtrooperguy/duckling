@@ -24,6 +24,8 @@ A web-based control system for animatronic droids using ESP32, featuring LED eye
 - **Pololu Maestro Servo Controller** (Mini Maestro) - optional, can be disabled
 - **DIYables Mini MP3 Player** - optional, auto-detected
 - **MicroSD Card** (for MP3 player, if using audio)
+- **External audio amplifier** (if using audio) — the YX5200-24SS has a small built-in amp on its SPK_1/SPK_2 pins, but for usable volume into anything beyond a tiny piezo speaker you'll want a dedicated amp on the 3.5mm AUX output. This build uses a **DROK 5W+5W Mini Audio Amplifier Board** (PAM8403-class), powered from the 5V rail.
+- **Speakers** (if using audio) — pair of **2.5W, 36mm full-range drivers**, one per amplifier channel. Anything in the 2–5W / 4–8Ω range will work; match the amp's per-channel output.
 - **Power Supply** 18V tool battery expected; 5V input adequate to power lights and sound, but not servos
 
 **Note**: Both the Maestro and MP3 player are optional, though without the Maestro it's not a very exciting project. The system will operate with LEDs and web interface even if these modules are not connected.
@@ -31,7 +33,6 @@ A web-based control system for animatronic droids using ESP32, featuring LED eye
 ### Recommended
 - 8" Tablet (landscape orientation) for web interface; optimized for this size
 - Smaller or larger screens will work but may require CSS adjustments
-- Speaker (for MP3 player audio output)
 
 ## Wiring Connections
 
@@ -67,17 +68,27 @@ ESP32 GND          → Maestro GND
 
 ### DIYables Mini MP3 Player (Serial2)
 ```
-ESP32 GPIO 26 (TX) → MP3 player RX
-ESP32 GPIO 25 (RX) → MP3 player TX
-ESP32 GND          → MP3 player GND
-5V                 → MP3 player VCC
-MP3 player SPK_1   → Speaker +
-MP3 player SPK_2   → Speaker -
+Control / power:
+  ESP32 GPIO 26 (TX)  → MP3 player RX
+  ESP32 GPIO 25 (RX)  → MP3 player TX
+  ESP32 GND           → MP3 player GND
+  5V rail             → MP3 player VCC
+
+Audio chain (this build uses the AUX out, not the direct speaker pins):
+  MP3 player 3.5mm AUX out  → DROK amplifier AUX in     (3.5mm cable)
+  5V rail                    → DROK amplifier VCC
+  GND                        → DROK amplifier GND
+  DROK amplifier L+ / L−    → Left speaker  (2.5W, 36mm)
+  DROK amplifier R+ / R−    → Right speaker (2.5W, 36mm)
+
+  (MP3 player SPK_1 / SPK_2 unused in this build — direct-drive would
+   work for very small / efficient speakers but not for these.)
 ```
 
 **Note**:
 - No series resistor is required on the MP3 player's RX line — the YX5200-24SS accepts ESP32's 3.3V logic directly. (This is the main wiring difference from a DFPlayer Mini.)
 - GPIO 25 and 26 are safe general-purpose pins that won't conflict with flash memory.
+- The amplifier and MP3 player share the 5V rail. Class-D amps switch hard and can inject supply noise; if you hear hiss/whine through the speakers, add a small bulk cap (100–470µF) right at the amp's VCC pin.
 
 ## Software Requirements
 
@@ -681,7 +692,8 @@ This system is designed to run from an **18V battery** with buck converters:
   - Flashlight (1 LED at max brightness 255): ~60mA
   - **Total LEDs**: ~85mA typical
 - **MP3 player**: ~50mA
-- **Total 5V**: ~650mA typical (recommend 2A+ converter for headroom)
+- **Audio amplifier** (DROK 5W+5W, PAM8403-class): ~20mA idle, ~100–400mA at typical sound-effect volume, up to ~3A at sustained full output. Most droid sound effects are short and well under peak, so plan for ~300mA typical.
+- **Total 5V**: ~950mA typical with audio active (recommend 2A+ converter for headroom; 3A+ if you anticipate driving the amp near full power)
 
 **8V Rail (from second buck converter):**
 - **Servos**: Varies by servo type and quantity

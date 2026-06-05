@@ -98,17 +98,10 @@ DETAILED COMPONENT CONNECTIONS
    │ DIYables Mini MP3  │
    │ (YX5200-24SS)      │
    │   [SD CARD SLOT]   │
-   │                    │
-   └─┬──┬──┬────┬───┬───┘
-     │  │  │    │   │
-    RX TX GND  VCC SPK_1 SPK_2
-     │  │  │    │   │   │
-     │  │  │    │   │   └────┐
-     │  │  │    │   └───┐    │    ┌──────────┐
-     │  │  │    │       └────┼────┤ SPEAKER  │
-     │  │  │    │            └────┤  (8Ω)    │
-     │  │  │    │                 └──────────┘
+   │  [3.5mm AUX OUT]   │
+   └─┬──┬──┬────┬───────┘
      │  │  │    │
+    RX TX GND  VCC
      │  │  │    │            ┌─────────────────┐
      │  │  │    └────────────┤ 5V              │
      │  │  │                 │                 │
@@ -117,13 +110,38 @@ DETAILED COMPONENT CONNECTIONS
      └───────────────────────┤ GPIO 26 (TX2)   │
                              └─────────────────┘
 
+   Audio chain (this build uses the 3.5mm AUX out, not the
+   direct SPK_1/SPK_2 pins):
+
+      [MP3 player 3.5mm AUX OUT]
+                 │
+                 │ short 3.5mm aux cable
+                 ▼
+       ┌─────────────────────┐
+       │  DROK 5W+5W Mini    │
+       │  Audio Amplifier    │◀── 5V / GND from same rail
+       │  (PAM8403-class)    │
+       └─┬─────┬───┬─────┬───┘
+         │ L+  │L− │ R+  │R−
+         ▼     ▼   ▼     ▼
+      ┌────────┐  ┌────────┐
+      │ LEFT   │  │ RIGHT  │
+      │ 2.5W   │  │ 2.5W   │
+      │ 36mm   │  │ 36mm   │
+      └────────┘  └────────┘
+
    Notes:
-   - MP3 player requires 5V power (drives 3W built-in amplifier)
+   - MP3 player powered from 5V rail; common GND with ESP32.
    - NO resistor required on the RX line — the YX5200-24SS accepts
-     ESP32's 3.3V logic directly (this is the main wiring difference
-     from a DFPlayer Mini, which needed a 1kΩ series resistor)
-   - SD card must be FAT32 formatted with files at /mp3/0001.mp3 …
-   - Speaker: 8Ω recommended (3W)
+     ESP32's 3.3V logic directly (main wiring difference from a
+     DFPlayer Mini, which needed a 1kΩ series resistor).
+   - SD card: FAT32 formatted, files at /mp3/0001.mp3 …
+   - The built-in SPK_1/SPK_2 amp is unused here — it's too weak to
+     drive the 36mm speakers usefully. The AUX → external amp chain
+     gives much more headroom.
+   - DROK amp is also powered from the 5V rail. Class-D switching
+     can inject supply noise — add a 100–470µF bulk cap at the
+     amp's VCC pin if you hear hiss/whine.
    - Baud rate: 9600
 
 
@@ -254,7 +272,10 @@ PRODUCTION SYSTEM (with 18V Battery):
 □ Step 4: Connect MP3 Player (if using)
   - ESP32 GPIO 26 → MP3 Player RX (direct, no resistor needed)
   - ESP32 GPIO 25 → MP3 Player TX (direct)
-  - MP3 Player SPK+ and SPK- to speaker
+  - MP3 Player 3.5mm AUX OUT → DROK amplifier AUX IN (3.5mm cable)
+  - DROK amplifier VCC/GND → 5V rail / common ground
+  - DROK amplifier L+/L− → left speaker  (2.5W, 36mm)
+  - DROK amplifier R+/R− → right speaker (2.5W, 36mm)
 
 □ Step 5: Connect Maestro (if using)
   - ESP32 GPIO 17 → Maestro RX
