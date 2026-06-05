@@ -125,19 +125,25 @@ struct Button {
   int mp3Track;            // DFPlayer track number (-1 = no sound)
 };
 
-// EMOTES: Change eye colors and trigger servo sequences
-// Ordered to match Maestro script programming (0-8)
+// EMOTES: Trigger servo sequences (and optionally sound). Eye color is
+// controlled exclusively via the Eye Colors buttons; emotes leave the eyes
+// alone (preserveLED12 = true on every row). The LED1&2 color values below
+// are kept as documentation of each emote's "thematic" color and are NOT
+// applied while preserveLED12 stays true. Flipping a row's preserveLED12 to
+// false re-enables per-emote eye color changes with the documented color.
+// Ordered to match Maestro script programming (0-9).
 const Button emotes[] = {
   // path        label          emoji  colorName  LED1&2 color       LED3 color    preserve12 preserve3 script# mp3#
-  {"angry",      "angry",       "😠",   "Red",     CRGB::Red,         CRGB::Black,  false,     false,    0,      -1},
-  {"curious",    "curious",     "🤔",   "Yellow",  CRGB::Yellow,      CRGB::Black,  false,     false,    1,      -1},
-  {"happy",      "happy",       "😊",   "Green",   CRGB::Green,       CRGB::Black,  false,     false,    2,      -1},
-  {"no",         "no",          "👎",   "Orange",  CRGB::DarkOrange,  CRGB::Black,  false,     false,    3,      -1},
-  {"sad",        "sad",         "😢",   "Blue",    CRGB::Blue,        CRGB::Black,  false,     false,    4,      -1},
-  {"scared",     "scared",      "😨",   "Purple",  CRGB::Purple,      CRGB::Black,  false,     false,    5,      -1},
-  {"sleep",      "go to sleep", "😴",   "Off",     CRGB::Black,       CRGB::Black,  false,     false,    6,      -1},
-  {"wake",       "wake up",     "🌅",   "White",   CRGB::White,       CRGB::Black,  false,     false,    7,      -1},
-  {"yes",        "yes",         "👍",   "Green",   CRGB::Green,       CRGB::Black,  false,     false,    8,      -1}
+  {"angry",      "angry",       "😠",   "Red",     CRGB::Red,         CRGB::Black,  true,      false,    0,      -1},
+  {"curious",    "curious",     "🤔",   "Yellow",  CRGB::Yellow,      CRGB::Black,  true,      false,    1,      -1},
+  {"dance",      "dance",       "💃",   "Pink",    CRGB::HotPink,     CRGB::Black,  true,      false,    2,      -1},
+  {"happy",      "happy",       "😊",   "Green",   CRGB::Green,       CRGB::Black,  true,      false,    3,      -1},
+  {"no",         "no",          "👎",   "Orange",  CRGB::DarkOrange,  CRGB::Black,  true,      false,    4,      -1},
+  {"sad",        "sad",         "😢",   "Blue",    CRGB::Blue,        CRGB::Black,  true,      false,    5,      -1},
+  {"scared",     "scared",      "😨",   "Purple",  CRGB::Purple,      CRGB::Black,  true,      false,    6,      -1},
+  {"sleep",      "go to sleep", "😴",   "Off",     CRGB::Black,       CRGB::Black,  true,      false,    7,      -1},
+  {"wake",       "wake up",     "🌅",   "White",   CRGB::White,       CRGB::Black,  true,      false,    8,      -1},
+  {"yes",        "yes",         "👍",   "Green",   CRGB::Green,       CRGB::Black,  true,      false,    9,      -1}
 };
 const int numEmotes = sizeof(emotes) / sizeof(emotes[0]);
 
@@ -322,8 +328,10 @@ void triggerButton(const Button &button, bool fromIdle = false) {
   #if DEBUG_MODE
     Serial.print("Triggering: ");
     Serial.println(button.path);
-    Serial.print("Eyes ");
-    Serial.println(button.colorName);
+    if (!button.preserveLED12) {
+      Serial.print("Eyes ");
+      Serial.println(button.colorName);
+    }
   #endif
   
   // Store and scale colors with appropriate brightness levels

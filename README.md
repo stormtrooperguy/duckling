@@ -10,8 +10,7 @@ A web-based control system for animatronic droids using ESP32, featuring LED eye
 - **Servo Control**: Optional integration with Pololu Maestro for complex servo sequences
 - **Sound Effects**: Optional DFPlayer Mini for MP3 audio playback
 - **Modular Design**: Run with any combination of components (LEDs only, LEDs + Servos, full system)
-- **Emotes System**: Pre-configured emotional states with coordinated eye colors and servo movements
-- **Eye Color Restore**: After each emote sequence finishes, eyes automatically return to the color they were before the emote
+- **Emotes System**: Pre-configured emotional states that trigger servo movements (and optionally sound). Eye colors are controlled separately via the Eye Colors buttons — emotes don't touch the eyes.
 - **Idle Mode**: Autonomous mode that cycles through emotes in random order with natural timing delays, making the droid look active when not being puppeteered
 - **Toggle Switches**: Flashlight and Idle Mode rendered as CSS slide toggles in the web UI, reflecting current state at a glance
 - **Eye Colors System**: Quick eye color changes without servo movements (7 colors available)
@@ -255,21 +254,22 @@ The brightness is applied automatically through scaling functions:
 
 ### Available Emotes
 
-Emotes change eye colors, trigger servo sequences, and then restore the previous eye color when the sequence finishes:
+Emotes trigger a Maestro servo sequence (and, where configured, an MP3 track). They do **not** touch the eyes — to change eye color, use the **Eye Colors** buttons below.
 
-| Emote | Eye Color | Maestro Script | Description |
-|-------|-----------|----------------|-------------|
-| **angry** | Red | 0 | Angry expression |
-| **curious** | Yellow | 1 | Curious expression |
-| **happy** | Green | 2 | Happy expression |
-| **no** | Dark Orange | 3 | Negative response |
-| **sad** | Blue | 4 | Sad expression |
-| **scared** | Purple | 5 | Scared expression |
-| **go to sleep** | Off | 6 | All LEDs off |
-| **wake up** | White | 7 | Eyes turn white |
-| **yes** | Green | 8 | Affirmative response |
+| Emote | Maestro Script | Description |
+|-------|----------------|-------------|
+| **angry** | 0 | Angry expression |
+| **curious** | 1 | Curious expression |
+| **dance** | 2 | Dance sequence |
+| **happy** | 3 | Happy expression |
+| **no** | 4 | Negative response |
+| **sad** | 5 | Sad expression |
+| **scared** | 6 | Scared expression |
+| **go to sleep** | 7 | Sleep position |
+| **wake up** | 8 | Wake animation |
+| **yes** | 9 | Affirmative response |
 
-**Eye color restore**: When a servo sequence completes, the eyes automatically return to whatever color was active before the emote was triggered. This means emotes are non-destructive — they express and then return to the prior state.
+**Decoupled from eye color**: Emotes are pure servo+sound triggers. Whatever eye color was active when an emote fires remains active throughout and after the sequence — the eyes are entirely under the operator's control via the Eye Colors buttons.
 
 ### Toggles
 
@@ -286,9 +286,9 @@ The toggles fan in from the same JSON status that powers the rest of the web UI,
 
 Idle mode makes the droid appear active when no one is puppeteering it. When enabled:
 
-- The droid automatically fires emotes in randomized order, cycling through all 9 emotes before repeating
+- The droid automatically fires emotes in randomized order, cycling through all 10 emotes before repeating
 - Delays between emotes are randomized (6–15 seconds from the start of one emote to the start of the next), producing natural-looking timing
-- After each emote sequence finishes, eyes restore to the pre-idle color before the next emote fires
+- Eyes are not touched during idle — whatever color the operator last set remains throughout
 - Idle mode stops automatically if any emote button or eye color button is pressed
 - Flip the **Idle Mode** toggle off to stop manually
 
@@ -426,16 +426,20 @@ SD Card Root
 
 ### Script Numbers
 
-Each emote can trigger a Maestro script. Program your servo sequences in Maestro Control Center:
+Each emote triggers a Maestro script by number. Program your servo sequences in Maestro Control Center in this order — the firmware's `emotes[]` array is indexed to match:
 
-- Script 0: Angry movement (also temporarily used by 'no' and 'scared')
-- Script 1: Curious movement
-- Script 2: Happy movement
-- Script 3: Sad movement
-- Script 4: Sleep position
-- Script 5: Wake animation
-- Script 6: Yes/affirmative movement
-- Script 7+: Available for additional custom emotes (program 'no' and 'scared' here when ready)
+- Script 0: Angry
+- Script 1: Curious
+- Script 2: Dance
+- Script 3: Happy
+- Script 4: No (negative response)
+- Script 5: Sad
+- Script 6: Scared
+- Script 7: Sleep
+- Script 8: Wake
+- Script 9: Yes (affirmative)
+
+If you re-record scripts in a different order on the Maestro, update the `scriptNumber` field on each emote row in `src/main.cpp` to match.
 
 ## Web Interface
 
@@ -729,6 +733,12 @@ For issues or questions:
 4. Check power supply is adequate
 
 ## Version History
+
+- **v1.13**: Emotes decoupled from eye color; new `dance` emote
+  - New emote `dance` 💃 mapped to Maestro script 2.
+  - Maestro script numbers reshuffled to match the updated Maestro upload. Full new order: angry (0), curious (1), dance (2), happy (3), no (4), sad (5), scared (6), sleep (7), wake (8), yes (9). Idle mode now cycles 10 emotes (was 9).
+  - Emotes no longer change eye color. `preserveLED12` is now `true` on every row in `emotes[]`; eye color is controlled exclusively via the Eye Colors buttons. The themed colors on each emote row (`CRGB::Red` for angry, etc.) remain in the source as documentation of intent and are easy to re-enable by flipping that row's `preserveLED12` back to `false`.
+  - The post-emote eye-color restore machinery in `loop()` stays in place but is unreachable under the new defaults — kept as an extension point.
 
 - **v1.12**: Inline signal-repeater pixel
   - Added a 4th pixel at the head of the chain (index 0) that acts as a hardware signal repeater for the long data run between the controller and the head LEDs. Symptoms before: intermittent flicker / wrong colors with no fix from cable changes or a series resistor on the data line. With the repeater inline, the WS2812 reshapes and re-clocks the data stream before it reaches the head pixels.

@@ -27,6 +27,7 @@ DROID_COLOR = "green"
 EMOTES = [
     ("angry",   "angry",       "😠"),
     ("curious", "curious",     "🤔"),
+    ("dance",   "dance",       "💃"),
     ("happy",   "happy",       "😊"),
     ("no",      "no",          "👎"),
     ("sad",     "sad",         "😢"),
@@ -216,9 +217,12 @@ def dispatch(path):
                 state["lastEmote"] = label
                 # Any user-triggered emote/eye-color cancels idle.
                 state["idle"] = False
-                # Track current eye state (emulator does not simulate the
-                # post-sequence restore, so emotes "stick" until the next click).
-                state["currentEye"] = path
+                # Only eye-color buttons update currentEye; emotes leave the
+                # eyes alone (preserveLED12 = true on every emote in the
+                # firmware, so the highlighted eye-color button stays
+                # highlighted across emote clicks).
+                if any(p == path for p, _, _ in EYE_COLORS):
+                    state["currentEye"] = path
 
 
 def snapshot_state():
