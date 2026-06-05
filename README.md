@@ -732,6 +732,17 @@ For issues or questions:
 3. Confirm all libraries are installed
 4. Check power supply is adequate
 
+## Sources
+
+External references consulted during development — useful starting points for hardware datasheets, library docs, and integration notes when extending the system.
+
+### DIYables Mini MP3 Player (v1.14)
+
+- [DIYables Mini MP3 Player Module — product page](https://diyables.io/products/mp3-player-module)
+- [DIYables-Mini-Mp3 — GitHub repository](https://github.com/DIYables/DIYables-Mini-Mp3) (library source, examples, API header)
+- [PlatformIO Registry — diyables/DIYables_MiniMp3](https://registry.platformio.org/libraries/diyables/DIYables_MiniMp3)
+- [ESP32 Tutorial: Mini MP3 Player Module](https://esp32io.com/tutorials/esp32-mini-mp3-player-module) (wiring, library API walk-through)
+
 ## Version History
 
 - **v1.14**: Swapped audio hardware: DFPlayer Mini → DIYables Mini MP3 Player; per-emote MP3 tracks wired up
