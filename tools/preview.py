@@ -53,7 +53,7 @@ state = {
     "lastEmote": "orange (startup)",
     "idle": False,
     "maestro": True,
-    "dfplayer": True,
+    "mp3": True,
     "flashlight": False,
     "currentEye": "color_orange",
     "status": "Ready (emulated)",
@@ -170,7 +170,7 @@ max-width: 1200px; margin: 0 auto; font-size: 9px; }}
 <div class="status-console"><h3>System Status</h3><div class="status-grid">
 <div class="status-item"><strong>Network:</strong> {DROID_NAME} (192.168.4.1)</div>
 <div class="status-item"><strong>Maestro:</strong> <span id="ms">&mdash;</span></div>
-<div class="status-item"><strong>DFPlayer:</strong> <span id="ds">&mdash;</span></div>
+<div class="status-item"><strong>MP3:</strong> <span id="ds">&mdash;</span></div>
 <div class="status-item"><strong>Idle:</strong> <span id="im">&mdash;</span></div>
 <div class="status-item"><strong>Status:</strong> <span id="ss">&mdash;</span></div>
 <div class="status-item"><strong>Last:</strong> <span id="le">&mdash;</span></div>
@@ -183,7 +183,7 @@ function r(d){{if(!d)return;st=d;
 document.getElementById('le').textContent=d.lastEmote;
 document.getElementById('im').textContent=d.idle?'On':'Off';
 document.getElementById('ms').textContent=d.maestro?'Connected':'Disabled';
-document.getElementById('ds').textContent=d.dfplayer?'Connected':'Not Available';
+document.getElementById('ds').textContent=d.mp3?'Connected':'Not Available';
 document.getElementById('ss').textContent=d.status;
 document.querySelectorAll('button.on').forEach(b=>b.classList.remove('on'));
 if(d.currentEye)hl(d.currentEye,true);

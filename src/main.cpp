@@ -12,7 +12,7 @@
   - Web interface optimized for landscape tablets
   - FastLED control for addressable RGB LEDs
   - Pololu Maestro servo controller integration
-  - DFPlayer Mini MP3 module support
+  - DIYables Mini MP3 player support (YX5200-24SS)
   - Multiple emotes with coordinated LEDs, sounds, and servos
   - Performance optimized HTTP handling
   - Debug mode for development and troubleshooting
@@ -45,11 +45,12 @@ const char* ap_password = "changeme";    // Change to a secure password!
 #define MAESTRO_TX_PIN 17         // ESP32 TX (connects to Maestro RX)
 #define MAESTRO_BAUD 9600
 
-// DFPlayer Mini MP3 Module
-#define DFPLAYER_SERIAL_NUM 2     // Use Serial2
-#define DFPLAYER_RX_PIN 25        // ESP32 RX (connects to DFPlayer TX) - Changed from GPIO 9
-#define DFPLAYER_TX_PIN 26        // ESP32 TX (connects to DFPlayer RX) - Changed from GPIO 10
-#define DFPLAYER_BAUD 9600
+// DIYables Mini MP3 Player (YX5200-24SS) — same UART protocol as DFPlayer Mini
+// but with a tidier library API and 3.3V-tolerant logic (no series resistor needed).
+#define MP3_SERIAL_NUM 2          // Use Serial2
+#define MP3_RX_PIN 25             // ESP32 RX (connects to MP3 player TX)
+#define MP3_TX_PIN 26             // ESP32 TX (connects to MP3 player RX)
+#define MP3_BAUD 9600
 
 // NOTE: GPIO 9 and 10 are used for flash and will cause boot issues on most ESP32 boards
 // GPIO 25 and 26 are safe general-purpose pins
@@ -62,18 +63,18 @@ bool maestroAvailable = MAESTRO_ENABLED;  // Track if Maestro is available
 
 // Action queue: AsyncWebServer handlers enqueue requested paths; loop() drains
 // the queue and runs the actual dispatch. Keeps every hardware operation
-// (Maestro, LEDs, DFPlayer) single-threaded inside loop() so there is no
+// (Maestro, LEDs, MP3 player) single-threaded inside loop() so there is no
 // concurrent access between the async task and the main task.
 #define ACTION_PATH_MAX 32
 #define ACTION_QUEUE_DEPTH 8
 struct ActionMsg { char path[ACTION_PATH_MAX]; };
 QueueHandle_t actionQueue = NULL;
 
-// DFPlayer Mini library
-#include <DFRobotDFPlayerMini.h>
-HardwareSerial dfPlayerSerial(DFPLAYER_SERIAL_NUM);
-DFRobotDFPlayerMini dfPlayer;
-bool dfPlayerAvailable = false;     // Track if DFPlayer initialized successfully
+// DIYables Mini MP3 Player library
+#include <DIYables_MiniMp3.h>
+HardwareSerial mp3PlayerSerial(MP3_SERIAL_NUM);
+DIYables_MiniMp3 mp3Player;
+bool mp3PlayerAvailable = false;    // Track if MP3 player initialized successfully
 
 // FastLED library
 #include <FastLED.h>
@@ -122,7 +123,7 @@ struct Button {
   bool preserveLED12;      // If true, don't change LEDs 1 & 2
   bool preserveLED3;       // If true, don't change LED 3
   int scriptNumber;        // Maestro script number (-1 = no script)
-  int mp3Track;            // DFPlayer track number (-1 = no sound)
+  int mp3Track;            // MP3 player track number (-1 = no sound)
 };
 
 // EMOTES: Trigger servo sequences (and optionally sound). Eye color is
@@ -134,16 +135,16 @@ struct Button {
 // Ordered to match Maestro script programming (0-9).
 const Button emotes[] = {
   // path        label          emoji  colorName  LED1&2 color       LED3 color    preserve12 preserve3 script# mp3#
-  {"angry",      "angry",       "😠",   "Red",     CRGB::Red,         CRGB::Black,  true,      false,    0,      -1},
-  {"curious",    "curious",     "🤔",   "Yellow",  CRGB::Yellow,      CRGB::Black,  true,      false,    1,      -1},
-  {"dance",      "dance",       "💃",   "Pink",    CRGB::HotPink,     CRGB::Black,  true,      false,    2,      -1},
-  {"happy",      "happy",       "😊",   "Green",   CRGB::Green,       CRGB::Black,  true,      false,    3,      -1},
-  {"no",         "no",          "👎",   "Orange",  CRGB::DarkOrange,  CRGB::Black,  true,      false,    4,      -1},
-  {"sad",        "sad",         "😢",   "Blue",    CRGB::Blue,        CRGB::Black,  true,      false,    5,      -1},
-  {"scared",     "scared",      "😨",   "Purple",  CRGB::Purple,      CRGB::Black,  true,      false,    6,      -1},
-  {"sleep",      "go to sleep", "😴",   "Off",     CRGB::Black,       CRGB::Black,  true,      false,    7,      -1},
-  {"wake",       "wake up",     "🌅",   "White",   CRGB::White,       CRGB::Black,  true,      false,    8,      -1},
-  {"yes",        "yes",         "👍",   "Green",   CRGB::Green,       CRGB::Black,  true,      false,    9,      -1}
+  {"angry",      "angry",       "😠",   "Red",     CRGB::Red,         CRGB::Black,  true,      false,    0,      1},
+  {"curious",    "curious",     "🤔",   "Yellow",  CRGB::Yellow,      CRGB::Black,  true,      false,    1,      2},
+  {"dance",      "dance",       "💃",   "Pink",    CRGB::HotPink,     CRGB::Black,  true,      false,    2,      3},
+  {"happy",      "happy",       "😊",   "Green",   CRGB::Green,       CRGB::Black,  true,      false,    3,      4},
+  {"no",         "no",          "👎",   "Orange",  CRGB::DarkOrange,  CRGB::Black,  true,      false,    4,      5},
+  {"sad",        "sad",         "😢",   "Blue",    CRGB::Blue,        CRGB::Black,  true,      false,    5,      6},
+  {"scared",     "scared",      "😨",   "Purple",  CRGB::Purple,      CRGB::Black,  true,      false,    6,      7},
+  {"sleep",      "go to sleep", "😴",   "Off",     CRGB::Black,       CRGB::Black,  true,      false,    7,      8},
+  {"wake",       "wake up",     "🌅",   "White",   CRGB::White,       CRGB::Black,  true,      false,    8,      9},
+  {"yes",        "yes",         "👍",   "Green",   CRGB::Green,       CRGB::Black,  true,      false,    9,      10}
 };
 const int numEmotes = sizeof(emotes) / sizeof(emotes[0]);
 
@@ -207,17 +208,17 @@ void setup() {
     Serial.println("Maestro disabled in configuration");
   }
 
-  // Initialize DFPlayer Serial Connection
-  dfPlayerSerial.begin(DFPLAYER_BAUD, SERIAL_8N1, DFPLAYER_RX_PIN, DFPLAYER_TX_PIN);
-  Serial.println("Initializing DFPlayer...");
-  if (!dfPlayer.begin(dfPlayerSerial)) {
-    Serial.println("DFPlayer initialization failed!");
+  // Initialize MP3 Player Serial Connection
+  mp3PlayerSerial.begin(MP3_BAUD, SERIAL_8N1, MP3_RX_PIN, MP3_TX_PIN);
+  Serial.println("Initializing MP3 player...");
+  if (!mp3Player.begin(mp3PlayerSerial)) {
+    Serial.println("MP3 player initialization failed!");
     Serial.println("Check connections and SD card");
-    dfPlayerAvailable = false;
+    mp3PlayerAvailable = false;
   } else {
-    Serial.println("DFPlayer initialized successfully");
-    dfPlayer.volume(20);  // Set volume (0-30)
-    dfPlayerAvailable = true;
+    Serial.println("MP3 player initialized successfully");
+    mp3Player.setVolume(20);  // Set volume (0-30)
+    mp3PlayerAvailable = true;
   }
 
   // Initialize FastLED
@@ -278,8 +279,8 @@ void buildStatusJson(String &out) {
   out += (idleMode ? "true" : "false");
   out += ",\"maestro\":";
   out += (maestroAvailable ? "true" : "false");
-  out += ",\"dfplayer\":";
-  out += (dfPlayerAvailable ? "true" : "false");
+  out += ",\"mp3\":";
+  out += (mp3PlayerAvailable ? "true" : "false");
   out += ",\"flashlight\":";
   out += (leds[FLASHLIGHT_LED] != CRGB::Black ? "true" : "false");
   out += ",\"currentEye\":\"";
@@ -369,17 +370,17 @@ void triggerButton(const Button &button, bool fromIdle = false) {
   
   FastLED.show();
   
-  // Play MP3 track if specified (mp3Track >= 0) and DFPlayer is available
+  // Play MP3 track if specified (mp3Track >= 0) and player is available
   if (button.mp3Track >= 0) {
-    if (dfPlayerAvailable) {
+    if (mp3PlayerAvailable) {
       #if DEBUG_MODE
         Serial.print("Playing MP3 track ");
         Serial.println(button.mp3Track);
       #endif
-      dfPlayer.play(button.mp3Track);
+      mp3Player.play(button.mp3Track);
     } else {
       // Always show errors/warnings
-      Serial.println("MP3 requested but DFPlayer not available");
+      Serial.println("MP3 requested but player not available");
     }
   }
   
@@ -519,7 +520,7 @@ void buildPageHtml(String &out) {
   out += droidname;
   out += " (192.168.4.1)</div>"
          "<div class=\"status-item\"><strong>Maestro:</strong> <span id=\"ms\">&mdash;</span></div>"
-         "<div class=\"status-item\"><strong>DFPlayer:</strong> <span id=\"ds\">&mdash;</span></div>"
+         "<div class=\"status-item\"><strong>MP3:</strong> <span id=\"ds\">&mdash;</span></div>"
          "<div class=\"status-item\"><strong>Idle:</strong> <span id=\"im\">&mdash;</span></div>"
          "<div class=\"status-item\"><strong>Status:</strong> <span id=\"ss\">&mdash;</span></div>"
          "<div class=\"status-item\"><strong>Last:</strong> <span id=\"le\">&mdash;</span></div>"
@@ -534,7 +535,7 @@ void buildPageHtml(String &out) {
          "document.getElementById('le').textContent=d.lastEmote;"
          "document.getElementById('im').textContent=d.idle?'On':'Off';"
          "document.getElementById('ms').textContent=d.maestro?'Connected':'Disabled';"
-         "document.getElementById('ds').textContent=d.dfplayer?'Connected':'Not Available';"
+         "document.getElementById('ds').textContent=d.mp3?'Connected':'Not Available';"
          "document.getElementById('ss').textContent=d.status;"
          "document.querySelectorAll('button.on').forEach(b=>b.classList.remove('on'));"
          "if(d.currentEye)hl(d.currentEye,true);"

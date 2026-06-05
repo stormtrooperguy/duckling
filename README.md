@@ -1,6 +1,6 @@
 # ESP32 Droid Control System
 
-A web-based control system for animatronic droids using ESP32, featuring LED eye control, servo movements via Pololu Maestro, and optional MP3 sound effects via DFPlayer Mini.
+A web-based control system for animatronic droids using ESP32, featuring LED eye control, servo movements via Pololu Maestro, and optional MP3 sound effects via DIYables Mini MP3 Player.
 
 ## Features
 
@@ -8,7 +8,7 @@ A web-based control system for animatronic droids using ESP32, featuring LED eye
 - **Web Interface**: Responsive landscape-optimized interface for 8" tablets with fast response times
 - **LED Eye Control**: 3 addressable LEDs in the head (WS2812B/NeoPixel) with per-LED brightness (eyes dimmed for comfort, flashlight at max), plus an inline signal-repeater pixel near the controller
 - **Servo Control**: Optional integration with Pololu Maestro for complex servo sequences
-- **Sound Effects**: Optional DFPlayer Mini for MP3 audio playback
+- **Sound Effects**: Optional DIYables Mini MP3 Player for MP3 audio playback
 - **Modular Design**: Run with any combination of components (LEDs only, LEDs + Servos, full system)
 - **Emotes System**: Pre-configured emotional states that trigger servo movements (and optionally sound). Eye colors are controlled separately via the Eye Colors buttons — emotes don't touch the eyes.
 - **Idle Mode**: Autonomous mode that cycles through emotes in random order with natural timing delays, making the droid look active when not being puppeteered
@@ -22,16 +22,16 @@ A web-based control system for animatronic droids using ESP32, featuring LED eye
 - **ESP32 Development Board**
 - **4x WS2812B/NeoPixel LEDs** (addressable RGB LEDs): 3 in the head (2 eyes + 1 flashlight) plus 1 inline repeater pixel placed near the controller end of the long data run, used to clean up the data signal before it reaches the head. The repeater pixel is held off in firmware and isn't visible in normal operation.
 - **Pololu Maestro Servo Controller** (Mini Maestro) - optional, can be disabled
-- **DFPlayer Mini MP3 Module** - optional, auto-detected
-- **MicroSD Card** (for DFPlayer, if using audio)
+- **DIYables Mini MP3 Player** - optional, auto-detected
+- **MicroSD Card** (for MP3 player, if using audio)
 - **Power Supply** 18V tool battery expected; 5V input adequate to power lights and sound, but not servos
 
-**Note**: Both the Maestro and DFPlayer are optional, though without the Maestro it's not a very exciting project. The system will operate with LEDs and web interface even if these modules are not connected.
+**Note**: Both the Maestro and MP3 player are optional, though without the Maestro it's not a very exciting project. The system will operate with LEDs and web interface even if these modules are not connected.
 
 ### Recommended
 - 8" Tablet (landscape orientation) for web interface; optimized for this size
 - Smaller or larger screens will work but may require CSS adjustments
-- Speaker (for DFPlayer audio output)
+- Speaker (for MP3 player audio output)
 
 ## Wiring Connections
 
@@ -44,8 +44,8 @@ A web-based control system for animatronic droids using ESP32, featuring LED eye
 | **LED Strip Data** | GPIO 5 | - | WS2812B data line |
 | **Maestro RX** | GPIO 16 | Serial1 | Receives from Maestro TX |
 | **Maestro TX** | GPIO 17 | Serial1 | Transmits to Maestro RX |
-| **DFPlayer RX** | GPIO 25 | Serial2 | Receives from DFPlayer TX |
-| **DFPlayer TX** | GPIO 26 | Serial2 | Transmits to DFPlayer RX |
+| **MP3 player RX** | GPIO 25 | Serial2 | Receives from MP3 player TX |
+| **MP3 player TX** | GPIO 26 | Serial2 | Transmits to MP3 player RX |
 
 **Note**: All pin assignments are easily configurable at the top of the sketch. See [Serial Port Configuration](#serial-port-configuration) below.
 
@@ -65,18 +65,18 @@ ESP32 GPIO 16 (RX) → Maestro TX
 ESP32 GND          → Maestro GND
 ```
 
-### DFPlayer Mini (Serial2)
+### DIYables Mini MP3 Player (Serial2)
 ```
-ESP32 GPIO 26 (TX) → DFPlayer RX (through 1kΩ resistor)
-ESP32 GPIO 25 (RX) → DFPlayer TX
-ESP32 GND          → DFPlayer GND
-5V                 → DFPlayer VCC
-DFPlayer SPK+      → Speaker +
-DFPlayer SPK-      → Speaker -
+ESP32 GPIO 26 (TX) → MP3 player RX
+ESP32 GPIO 25 (RX) → MP3 player TX
+ESP32 GND          → MP3 player GND
+5V                 → MP3 player VCC
+MP3 player SPK_1   → Speaker +
+MP3 player SPK_2   → Speaker -
 ```
 
-**Note**: 
-- DFPlayer RX typically requires a 1kΩ resistor between ESP32 TX and DFPlayer RX pin.
+**Note**:
+- No series resistor is required on the MP3 player's RX line — the YX5200-24SS accepts ESP32's 3.3V logic directly. (This is the main wiring difference from a DFPlayer Mini.)
 - GPIO 25 and 26 are safe general-purpose pins that won't conflict with flash memory.
 
 ## Software Requirements
@@ -105,7 +105,7 @@ The first `pio run` will download all dependencies into `.pio/` (gitignored). De
 
 - `FastLED` — LED control (^3.7.0)
 - `PololuMaestro` — servo controller (^1.0.0)
-- `DFRobotDFPlayerMini` — MP3 module (^1.0.6)
+- `DIYables_MiniMp3` — MP3 player (^1.0.0)
 
 Adjust `upload_port` / `monitor_port` in `platformio.ini` if your board enumerates as a different serial device.
 
@@ -184,18 +184,18 @@ All serial port settings are centralized at the top of the sketch for easy confi
 #define MAESTRO_TX_PIN 17         // ESP32 TX (connects to Maestro RX)
 #define MAESTRO_BAUD 9600
 
-// DFPlayer Mini MP3 Module
-#define DFPLAYER_SERIAL_NUM 2     // Use Serial2
-#define DFPLAYER_RX_PIN 25        // ESP32 RX (connects to DFPlayer TX)
-#define DFPLAYER_TX_PIN 26        // ESP32 TX (connects to DFPlayer RX)
-#define DFPLAYER_BAUD 9600
+// DIYables Mini MP3 Player
+#define MP3_SERIAL_NUM 2          // Use Serial2
+#define MP3_RX_PIN 25             // ESP32 RX (connects to MP3 player TX)
+#define MP3_TX_PIN 26             // ESP32 TX (connects to MP3 player RX)
+#define MP3_BAUD 9600
 ```
 
 **To disable Maestro**: Set `MAESTRO_ENABLED false` if the Maestro board is not connected. The system will operate normally with LEDs and sound, skipping servo commands.
 
 **To change pins**: Simply modify the `_RX_PIN` and `_TX_PIN` values.
 
-**To use different serial ports**: Change `MAESTRO_SERIAL_NUM` or `DFPLAYER_SERIAL_NUM` (ESP32 supports Serial1, Serial2).
+**To use different serial ports**: Change `MAESTRO_SERIAL_NUM` or `MP3_SERIAL_NUM` (ESP32 supports Serial1, Serial2).
 
 **To change baud rates**: Modify the `_BAUD` definitions (both devices default to 9600).
 
@@ -209,11 +209,11 @@ All serial port settings are centralized at the top of the sketch for easy confi
 
 **Remember**: Always change the default SSID and password before first use!
 
-### DFPlayer Volume
+### MP3 Player Volume
 
 Adjust volume (0-30) in `setup()`:
 ```cpp
-dfPlayer.volume(20);  // Default: 20
+mp3Player.setVolume(20);  // Default: 20
 ```
 
 ### FastLED Brightness
@@ -256,18 +256,18 @@ The brightness is applied automatically through scaling functions:
 
 Emotes trigger a Maestro servo sequence (and, where configured, an MP3 track). They do **not** touch the eyes — to change eye color, use the **Eye Colors** buttons below.
 
-| Emote | Maestro Script | Description |
-|-------|----------------|-------------|
-| **angry** | 0 | Angry expression |
-| **curious** | 1 | Curious expression |
-| **dance** | 2 | Dance sequence |
-| **happy** | 3 | Happy expression |
-| **no** | 4 | Negative response |
-| **sad** | 5 | Sad expression |
-| **scared** | 6 | Scared expression |
-| **go to sleep** | 7 | Sleep position |
-| **wake up** | 8 | Wake animation |
-| **yes** | 9 | Affirmative response |
+| Emote | Maestro Script | MP3 Track | Description |
+|-------|----------------|-----------|-------------|
+| **angry** | 0 | 1 (`0001.mp3`) | Angry expression |
+| **curious** | 1 | 2 (`0002.mp3`) | Curious expression |
+| **dance** | 2 | 3 (`0003.mp3`) | Dance sequence |
+| **happy** | 3 | 4 (`0004.mp3`) | Happy expression |
+| **no** | 4 | 5 (`0005.mp3`) | Negative response |
+| **sad** | 5 | 6 (`0006.mp3`) | Sad expression |
+| **scared** | 6 | 7 (`0007.mp3`) | Scared expression |
+| **go to sleep** | 7 | 8 (`0008.mp3`) | Sleep position |
+| **wake up** | 8 | 9 (`0009.mp3`) | Wake animation |
+| **yes** | 9 | 10 (`0010.mp3`) | Affirmative response |
 
 **Decoupled from eye color**: Emotes are pure servo+sound triggers. Whatever eye color was active when an emote fires remains active throughout and after the sequence — the eyes are entirely under the operator's control via the Eye Colors buttons.
 
@@ -395,7 +395,7 @@ CRGB::Yellow, CRGB::Orange, CRGB::Purple, CRGB::Cyan, CRGB::Magenta
 
 Or use RGB values: `CRGB(255, 128, 0)` for custom colors.
 
-## DFPlayer Setup
+## MP3 Player Setup
 
 ### SD Card Preparation
 
@@ -414,7 +414,7 @@ SD Card Root
     └── ...
 ```
 
-### Troubleshooting DFPlayer
+### Troubleshooting MP3 Player
 
 - Check serial monitor for initialization messages
 - Ensure SD card is formatted as FAT32
@@ -573,7 +573,7 @@ Debug mode shows:
 - System will operate normally with LEDs and sounds
 - Serial monitor will show "Maestro disabled in configuration"
 
-### DFPlayer Issues
+### MP3 Player Issues
 
 **Problem**: ESP32 won't boot / constant reboot loop
 - **CRITICAL**: GPIO 9 and 10 are connected to flash memory on most ESP32 boards
@@ -584,11 +584,11 @@ Debug mode shows:
 **Problem**: No sound
 - Check serial monitor for initialization errors
 - Verify serial connections match configuration (default: GPIO 25 RX, GPIO 26 TX)
-- Check pin assignments in `DFPLAYER_RX_PIN` and `DFPLAYER_TX_PIN` definitions
+- Check pin assignments in `MP3_RX_PIN` and `MP3_TX_PIN` definitions
 - Verify SD card is inserted and formatted (FAT32)
 - Check speaker connections
-- Adjust volume: `dfPlayer.volume(25);`
-- Remember: 1kΩ resistor required on DFPlayer RX line
+- Adjust volume: `mp3Player.setVolume(25);`
+- No series resistor is required on the YX5200-24SS RX line (it accepts 3.3V logic directly)
 
 **Problem**: Wrong track plays
 - Verify file naming: `0001.mp3`, `0002.mp3`, etc.
@@ -603,8 +603,8 @@ Monitor debugging info at 115200 baud:
 
 ```
 Maestro serial initialized
-Initializing DFPlayer...
-DFPlayer initialized successfully
+Initializing MP3 player...
+MP3 player initialized successfully
 Eyes initialized to orange (brightness 50)
 Configuring Access Point...
 Access Point started!
@@ -641,13 +641,13 @@ Client disconnected.
 
 ### Error Messages (Always Shown Regardless of DEBUG_MODE)
 
-**When DFPlayer missing:**
+**When MP3 player missing:**
 ```
-Initializing DFPlayer...
-DFPlayer initialization failed!
+Initializing MP3 player...
+MP3 player initialization failed!
 Check connections and SD card
 ...
-MP3 requested but DFPlayer not available
+MP3 requested but MP3 player not available
 ```
 
 **When Maestro disabled:**
@@ -666,7 +666,7 @@ This system is designed to run from an **18V battery** with buck converters:
 ```
 18V Battery
     │
-    ├─── Buck Converter (18V → 5V, 2A+) ──→ ESP32, LEDs, DFPlayer
+    ├─── Buck Converter (18V → 5V, 2A+) ──→ ESP32, LEDs, MP3 player
     │
     └─── Buck Converter (18V → 8V, servo current) ──→ Maestro Servo Controller
 ```
@@ -680,7 +680,7 @@ This system is designed to run from an **18V battery** with buck converters:
   - Eyes (2 LEDs at brightness 50): ~24mA
   - Flashlight (1 LED at max brightness 255): ~60mA
   - **Total LEDs**: ~85mA typical
-- **DFPlayer**: ~50mA
+- **MP3 player**: ~50mA
 - **Total 5V**: ~650mA typical (recommend 2A+ converter for headroom)
 
 **8V Rail (from second buck converter):**
@@ -715,13 +715,13 @@ This system is designed to run from an **18V battery** with buck converters:
 This project uses the following open-source libraries:
 - FastLED (MIT License)
 - PololuMaestro (MIT License)
-- DFRobotDFPlayerMini (MIT License)
+- DIYables_MiniMp3 (MIT License)
 
 ## Credits
 
 - FastLED Library: Daniel Garcia
 - PololuMaestro Library: Pololu Corporation
-- DFPlayer Mini Library: DFRobot
+- DIYables_MiniMp3 Library: DIYables
 - WiFi Web Server Example: Rui Santos (randomnerdtutorials.com)
 
 ## Support
@@ -733,6 +733,13 @@ For issues or questions:
 4. Check power supply is adequate
 
 ## Version History
+
+- **v1.14**: Swapped audio hardware: DFPlayer Mini → DIYables Mini MP3 Player; per-emote MP3 tracks wired up
+  - Library: `DFRobotDFPlayerMini` → `diyables/DIYables_MiniMp3` (in `platformio.ini`). Same UART protocol underneath (both YX5200-based), but the DIYables library has a cleaner API: `setVolume()` instead of `volume()`, `begin()` accepts a `Stream&` and returns `bool` like before, and bonus methods (`isPlaying()`, EQ, looping) are now available if we ever want them.
+  - Identifier rename throughout `src/main.cpp`: `dfPlayer` → `mp3Player`, `dfPlayerSerial` → `mp3PlayerSerial`, `dfPlayerAvailable` → `mp3PlayerAvailable`, `DFPLAYER_*` constants → `MP3_*`. Status JSON key `dfplayer` → `mp3`; web UI label "DFPlayer:" → "MP3:".
+  - GPIO pins unchanged: still GPIO 25 (RX) / GPIO 26 (TX) on Serial2. Safe pins, already known-good.
+  - **Wiring change:** the 1kΩ series resistor on the player's RX line is no longer required. The YX5200-24SS accepts ESP32's 3.3V logic directly. (Harmless to leave in place if you don't want to rewire.)
+  - Per-emote MP3 tracks are now mapped: angry → 1, curious → 2, dance → 3, happy → 4, no → 5, sad → 6, scared → 7, sleep → 8, wake → 9, yes → 10. SD card needs `0001.mp3` … `0010.mp3` in the `/mp3` folder. Eye-color buttons remain silent.
 
 - **v1.13**: Emotes decoupled from eye color; new `dance` emote
   - New emote `dance` 💃 mapped to Maestro script 2.
@@ -746,7 +753,7 @@ For issues or questions:
 
 - **v1.11**: Bug fix — eye color now reliably restores after emote sequences (action queue architecture).
   - Latent race condition since the v1.7 async-server migration: `AsyncWebServer` handlers run on a separate FreeRTOS task and were calling Maestro / FastLED operations concurrently with `loop()`. Caused garbled `getScriptStatus()` responses (no restore) and, in some configurations, full crashes due to stack pressure in the async task.
-  - Fix: action queue. The async handler enqueues the requested path (`ActionMsg` of fixed size) and returns immediately; `loop()` drains the queue and runs `dispatchMaestroAction()` itself. All Maestro, FastLED, and DFPlayer operations are now single-threaded inside `loop()` — no possibility of concurrent hardware access. State updates still flow back to the UI via SSE the moment `loop()` processes the action.
+  - Fix: action queue. The async handler enqueues the requested path (`ActionMsg` of fixed size) and returns immediately; `loop()` drains the queue and runs `dispatchMaestroAction()` itself. All Maestro, FastLED, and MP3 player operations are now single-threaded inside `loop()` — no possibility of concurrent hardware access. State updates still flow back to the UI via SSE the moment `loop()` processes the action.
 
 - **v1.10**: Round buttons + warmer orange
   - Emote and eye-color buttons are now circles (`border-radius: 50%` + `aspect-ratio: 1/1`) on a fixed-width grid. Larger, easier touch targets that visually distinguish actions from the rectangular toggles.
@@ -802,7 +809,7 @@ For issues or questions:
   - ESP32 Access Point mode
   - FastLED eye control with 3 LEDs
   - Pololu Maestro integration
-  - DFPlayer Mini MP3 support
+  - DIYables Mini MP3 Player MP3 support
   - Ultra-compact web interface optimized for 8" landscape tablets
   - 9 pre-configured emotes (emotional expressions)
   - 1 utility action (flashlight toggle)
