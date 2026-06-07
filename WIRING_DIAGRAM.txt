@@ -22,8 +22,8 @@ COMPLETE SYSTEM OVERVIEW
           │            │         │ GPIO 5  │     │
           │            │         │ GPIO 16 │     │
           │            │         │ GPIO 17 │     │
-          │            │         │ GPIO 25 │     │
-          │            │         │ GPIO 26 │     │
+          │            │         │ GPIO 18 │     │
+          │            │         │ GPIO 19 │     │
           │            │         └────┬────┘     │
           │            │              │          │
           └────────────┴──────────────┴──────────┘
@@ -106,8 +106,8 @@ DETAILED COMPONENT CONNECTIONS
      │  │  │    └────────────┤ 5V              │
      │  │  │                 │                 │
      │  │  └─────────────────┤ GND             │  ESP32
-     │  └────────────────────┤ GPIO 25 (RX2)   │  Serial2
-     └───────────────────────┤ GPIO 26 (TX2)   │
+     │  └────────────────────┤ GPIO 18 (RX2)   │  Serial2
+     └───────────────────────┤ GPIO 19 (TX2)   │
                              └─────────────────┘
 
    Audio chain (this build uses the 3.5mm AUX out, not the
@@ -155,14 +155,15 @@ ESP32 GPIO    | Component         | Signal      | Notes
 GPIO 5        | LED Strip         | Data In     | WS2812B data line
 GPIO 16       | Maestro           | RX (ESP)    | Serial1 - from Maestro TX
 GPIO 17       | Maestro           | TX (ESP)    | Serial1 - to Maestro RX
-GPIO 25       | DIYables Mini MP3 | RX (ESP)    | Serial2 - from MP3 player TX
-GPIO 26       | DIYables Mini MP3 | TX (ESP)    | Serial2 - to MP3 player RX (no resistor needed)
+GPIO 18       | DIYables Mini MP3 | RX (ESP)    | Serial2 - from MP3 player TX
+GPIO 19       | DIYables Mini MP3 | TX (ESP)    | Serial2 - to MP3 player RX (no resistor needed)
 GND           | All Components    | Ground      | Common ground required
 5V            | LED Strip, MP3   | Power       | From 5V buck converter
 8V            | Maestro           | Power       | From 8V buck converter
 
 IMPORTANT: GPIO 9 and 10 are used for flash memory and will cause boot failures!
-           GPIO 25 and 26 are safe general-purpose pins.
+           GPIO 18 and 19 are safe general-purpose pins (VSPI defaults
+           but VSPI is never explicitly initialized in this firmware).
 
 
 POWER DISTRIBUTION (PRODUCTION SYSTEM)
@@ -272,8 +273,8 @@ PRODUCTION SYSTEM (with 18V Battery):
   - LED Strip DIN to ESP32 GPIO 5
 
 □ Step 4: Connect MP3 Player (if using)
-  - ESP32 GPIO 26 → MP3 Player RX (direct, no resistor needed)
-  - ESP32 GPIO 25 → MP3 Player TX (direct)
+  - ESP32 GPIO 19 → MP3 Player RX (direct, no resistor needed)
+  - ESP32 GPIO 18 → MP3 Player TX (direct)
   - MP3 Player 3.5mm AUX OUT → DROK amplifier AUX IN (3.5mm cable)
   - DROK amplifier VCC/GND → 5V rail / common ground
   - DROK amplifier L+/L− → left speaker  (2.5W, 36mm)

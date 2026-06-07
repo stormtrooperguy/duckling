@@ -48,13 +48,16 @@ const char* ap_password = "changeme";    // Change to a secure password!
 
 // DIYables Mini MP3 Player (YX5200-24SS) — same UART protocol as DFPlayer Mini
 // but with a tidier library API and 3.3V-tolerant logic (no series resistor needed).
+// GPIO 18/19 are the chip's default VSPI CLK/MISO pins; that's only a concern if
+// SPI is ever explicitly initialized in this firmware, which it isn't.
 #define MP3_SERIAL_NUM 2          // Use Serial2
-#define MP3_RX_PIN 25             // ESP32 RX (connects to MP3 player TX)
-#define MP3_TX_PIN 26             // ESP32 TX (connects to MP3 player RX)
+#define MP3_RX_PIN 18             // ESP32 RX (connects to MP3 player TX)
+#define MP3_TX_PIN 19             // ESP32 TX (connects to MP3 player RX)
 #define MP3_BAUD 9600
 
-// NOTE: GPIO 9 and 10 are used for flash and will cause boot issues on most ESP32 boards
-// GPIO 25 and 26 are safe general-purpose pins
+// NOTE: GPIO 6-11 are used for SPI flash and will cause boot issues on most
+// ESP32 boards. GPIO 18/19 (current MP3 UART) and 25/26 (former MP3 UART) are
+// safe general-purpose pins — either pair works for Serial2 via the GPIO matrix.
 
 // Maestro library
 #include <PololuMaestro.h>

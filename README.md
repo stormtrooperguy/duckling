@@ -45,8 +45,8 @@ A web-based control system for animatronic droids using ESP32, featuring LED eye
 | **LED Strip Data** | GPIO 5 | - | WS2812B data line |
 | **Maestro RX** | GPIO 16 | Serial1 | Receives from Maestro TX |
 | **Maestro TX** | GPIO 17 | Serial1 | Transmits to Maestro RX |
-| **MP3 player RX** | GPIO 25 | Serial2 | Receives from MP3 player TX |
-| **MP3 player TX** | GPIO 26 | Serial2 | Transmits to MP3 player RX |
+| **MP3 player RX** | GPIO 18 | Serial2 | Receives from MP3 player TX |
+| **MP3 player TX** | GPIO 19 | Serial2 | Transmits to MP3 player RX |
 
 **Note**: All pin assignments are easily configurable at the top of the sketch. See [Serial Port Configuration](#serial-port-configuration) below.
 
@@ -69,8 +69,8 @@ ESP32 GND          → Maestro GND
 ### DIYables Mini MP3 Player (Serial2)
 ```
 Control / power:
-  ESP32 GPIO 26 (TX)  → MP3 player RX
-  ESP32 GPIO 25 (RX)  → MP3 player TX
+  ESP32 GPIO 19 (TX)  → MP3 player RX
+  ESP32 GPIO 18 (RX)  → MP3 player TX
   ESP32 GND           → MP3 player GND
   5V rail             → MP3 player VCC
 
@@ -87,7 +87,7 @@ Audio chain (this build uses the AUX out, not the direct speaker pins):
 
 **Note**:
 - No series resistor is required on the MP3 player's RX line — the YX5200-24SS accepts ESP32's 3.3V logic directly. (This is the main wiring difference from a DFPlayer Mini.)
-- GPIO 25 and 26 are safe general-purpose pins that won't conflict with flash memory.
+- GPIO 18 and 19 are safe general-purpose pins that won't conflict with flash memory. (They're the chip's default VSPI CLK/MISO pins, but VSPI is never explicitly initialized in this firmware, so the pins are free for UART use.)
 - The amplifier and MP3 player share the 5V rail. Class-D amps switch hard and can inject supply noise; if you hear hiss/whine through the speakers, add a small bulk cap (100–470µF) right at the amp's VCC pin.
 
 ## Software Requirements
@@ -197,8 +197,8 @@ All serial port settings are centralized at the top of the sketch for easy confi
 
 // DIYables Mini MP3 Player
 #define MP3_SERIAL_NUM 2          // Use Serial2
-#define MP3_RX_PIN 25             // ESP32 RX (connects to MP3 player TX)
-#define MP3_TX_PIN 26             // ESP32 TX (connects to MP3 player RX)
+#define MP3_RX_PIN 18             // ESP32 RX (connects to MP3 player TX)
+#define MP3_TX_PIN 19             // ESP32 TX (connects to MP3 player RX)
 #define MP3_BAUD 9600
 ```
 
@@ -591,12 +591,12 @@ Debug mode shows:
 **Problem**: ESP32 won't boot / constant reboot loop
 - **CRITICAL**: GPIO 9 and 10 are connected to flash memory on most ESP32 boards
 - Using these pins will prevent the ESP32 from booting
-- The code now uses GPIO 25 (RX) and GPIO 26 (TX) which are safe
+- The code now uses GPIO 18 (RX) and GPIO 19 (TX) which are safe
 - If you modified the pins, avoid GPIO 6, 7, 8, 9, 10, 11 (flash pins)
 
 **Problem**: No sound
 - Check serial monitor for initialization errors
-- Verify serial connections match configuration (default: GPIO 25 RX, GPIO 26 TX)
+- Verify serial connections match configuration (default: GPIO 18 RX, GPIO 19 TX)
 - Check pin assignments in `MP3_RX_PIN` and `MP3_TX_PIN` definitions
 - Verify SD card is inserted and formatted (FAT32)
 - Check speaker connections
@@ -752,6 +752,11 @@ External references consulted during development — useful starting points for 
 - [ESP32 Tutorial: Mini MP3 Player Module](https://esp32io.com/tutorials/esp32-mini-mp3-player-module) (wiring, library API walk-through)
 
 ## Version History
+
+- **v1.16**: Moved MP3 player UART to GPIO 18 (RX) / GPIO 19 (TX)
+  - Previously on GPIO 25/26 — both pin pairs are safe general-purpose pins; the move was driven by physical layout convenience on the droid's wiring harness, not by anything wrong with 25/26.
+  - GPIO 18/19 are the chip's default VSPI CLK/MISO pins, but VSPI is never explicitly initialized in this firmware, so the pins are free for UART use via the GPIO matrix.
+  - **Re-wire required** if you're tracking this branch: move MP3 player TX from ESP32 GPIO 25 → 18, and MP3 player RX from ESP32 GPIO 26 → 19. The 25/26 pins are now free for other uses.
 
 - **v1.15**: Random-during-animation audio model; `silent` flag; WAV support documented; idle-mode latent bug fix
   - **New audio model.** The per-emote `mp3Track` field is gone. While any emote's Maestro animation is running, `loop()` plays a **random track** from the SD card library (1..`AUDIO_TRACK_COUNT`, currently 250) any time the player is idle, producing continuous chatter for the duration of the sequence. Tracks still playing when the animation ends are allowed to finish naturally. Once silent, the system stays silent until the next emote.
