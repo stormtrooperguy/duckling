@@ -265,20 +265,20 @@ The brightness is applied automatically through scaling functions:
 
 ### Available Emotes
 
-Emotes trigger a Maestro servo sequence (and, where configured, an MP3 track). They do **not** touch the eyes — to change eye color, use the **Eye Colors** buttons below.
+Emotes trigger a Maestro servo sequence. While the servo script runs, the firmware fills the soundstage with **random short audio clips** drawn from the SD card library (see [MP3 Player Setup](#mp3-player-setup) for how the library is structured). Tracks that are still playing when the servo script ends are allowed to finish naturally; once the player goes idle after the sequence ends, the droid stays silent until the next emote fires. Emotes do **not** touch the eyes — to change eye color, use the **Eye Colors** buttons below.
 
-| Emote | Maestro Script | MP3 Track | Description |
-|-------|----------------|-----------|-------------|
-| **angry** | 0 | 1 (`0001.mp3`) | Angry expression |
-| **curious** | 1 | 2 (`0002.mp3`) | Curious expression |
-| **dance** | 2 | 3 (`0003.mp3`) | Dance sequence |
-| **happy** | 3 | 4 (`0004.mp3`) | Happy expression |
-| **no** | 4 | 5 (`0005.mp3`) | Negative response |
-| **sad** | 5 | 6 (`0006.mp3`) | Sad expression |
-| **scared** | 6 | 7 (`0007.mp3`) | Scared expression |
-| **go to sleep** | 7 | 8 (`0008.mp3`) | Sleep position |
-| **wake up** | 8 | 9 (`0009.mp3`) | Wake animation |
-| **yes** | 9 | 10 (`0010.mp3`) | Affirmative response |
+| Emote | Maestro Script | Audio | Description |
+|-------|----------------|-------|-------------|
+| **angry** | 0 | random | Angry expression |
+| **curious** | 1 | random | Curious expression |
+| **dance** | 2 | random | Dance sequence |
+| **happy** | 3 | random | Happy expression |
+| **no** | 4 | random | Negative response |
+| **sad** | 5 | random | Sad expression |
+| **scared** | 6 | random | Scared expression |
+| **go to sleep** | 7 | **silent** | Sleep position (no audio — `silent = true`) |
+| **wake up** | 8 | random | Wake animation |
+| **yes** | 9 | random | Affirmative response |
 
 **Decoupled from eye color**: Emotes are pure servo+sound triggers. Whatever eye color was active when an emote fires remains active throughout and after the sequence — the eyes are entirely under the operator's control via the Eye Colors buttons.
 
@@ -336,66 +336,56 @@ Eye colors change only the eye LEDs without triggering servos (preserves flashli
 
 ### Step 1: Add to Appropriate Array
 
-For a new emote (changes eye color + servos), add to `emotes[]`:
+For a new emote (triggers a servo script, fills with random audio), add to `emotes[]`:
 
 ```cpp
 const Button emotes[] = {
   // ... existing emotes ...
-  {"newemote", "New Emote", "Orange", CRGB::Orange, CRGB::Black, false, false, 12, 5},
-  //    |           |           |          |            |         |      |      |   |
-  //    |           |           |          |            |         |      |      |   MP3 track (or -1)
-  //    |           |           |          |            |         |      |      Maestro script (or -1)
-  //    |           |           |          |            |         |      Preserve LED 3? (false)
-  //    |           |           |          |            |         Preserve LED 1&2? (false for emotes)
-  //    |           |           |          |            LED 3 color
-  //    |           |           |          LED 1&2 color
-  //    |           |           Color name for serial output
-  //    |           Button label
-  //    URL path
+  // path     label        emoji   colorName  LED1&2 color  LED3 color   preserve12 preserve3 script# silent
+  {"newemote", "New Emote", "✨",   "Cyan",    CRGB::Cyan,   CRGB::Black, true,      false,    10,     false},
+  //    |          |         |       |           |             |           |          |        |       |
+  //    |          |         |       |           |             |           |          |        |       Suppress random audio? (false for normal emotes, true to stay silent)
+  //    |          |         |       |           |             |           |          |        Maestro script number (0+ or -1 for none)
+  //    |          |         |       |           |             |           |          Preserve flashlight state? (false on emotes — flashlight goes to led3Color)
+  //    |          |         |       |           |             |           Preserve eyes? (true on emotes — eye color is controlled via the Eye Colors buttons)
+  //    |          |         |       |           |             LED 3 color (CRGB::Black if no flashlight change)
+  //    |          |         |       |           LED 1&2 thematic color — ignored at runtime while preserveLED12 is true; kept as documentation
+  //    |          |         |       Color name for debug serial output
+  //    |          |         Emoji glyph rendered above the label
+  //    |          Button label shown in the UI
+  //    URL path (e.g. /maestro/newemote)
 };
 ```
-
-For a new action (preserves eye color), add to `actions[]`:
-
-```cpp
-const Button actions[] = {
-  // ... existing actions ...
-  {"myaction", "My Action", "Action", CRGB::Black, CRGB::Purple, true, false, -1, 7},
-  //                                                              |     |      |    |
-  //                                                              |     |      |    MP3 track
-  //                                                              |     |      No servo script
-  //                                                              |     Preserve LED 3? (false)
-  //                                                              Preserve eyes: true
-};
-```
-
-**Note**: The flashlight, idle_start, and idle_stop actions have special handling in the HTTP request loop rather than going through `triggerButton()`. For simple actions, use `triggerButton()`. For custom toggle or mode behavior, add a special case alongside the flashlight implementation.
 
 For a new eye color (changes eyes only), add to `eyeColors[]`:
 
 ```cpp
 const Button eyeColors[] = {
   // ... existing colors ...
-  {"color_orange", "orange", "Orange", CRGB::Orange, CRGB::Black, false, true, -1, -1},
-  //                                                               |      |     |    |
-  //                                                               |      |     |    No MP3
-  //                                                               |      |     No servo
-  //                                                               |      Preserve LED 3: true!
-  //                                                               Change eyes: false
+  // path           label    emoji  colorName  LED1&2 color  LED3 color   preserve12 preserve3 script# silent
+  {"color_cyan",    "cyan",  "",    "Cyan",    CRGB::Cyan,   CRGB::Black, false,     true,     -1,     false},
+  //                                                                       |          |         |       |
+  //                                                                       |          |         |       Irrelevant (no script → no audio)
+  //                                                                       |          |         No Maestro script
+  //                                                                       |          Preserve flashlight: true (don't disturb LED 3)
+  //                                                                       Change eyes: false → LED 1&2 set to the color above
 };
 ```
+
+**Note**: The flashlight, idle_start, and idle_stop actions have special handling in `dispatchMaestroAction()` rather than going through `triggerButton()`. For simple actions, you can re-use `triggerButton()` with a new struct entry. For custom toggle or mode behavior, add a `strcmp` branch alongside the flashlight implementation.
 
 ### Step 2: Parameters Explained
 
 - **path**: URL endpoint (alphanumeric, no spaces)
 - **label**: Button text shown on web interface
-- **colorName**: Descriptive name for serial debugging
-- **color**: LED 1&2 color (ignored if preserveLED12 is true)
-- **led3Color**: LED 3 color (ignored if preserveLED3 is true)
-- **preserveLED12**: `false` for emotes/eye colors (changes eyes), `true` for actions (preserves eyes)
-- **preserveLED3**: `true` for eye colors (preserve flashlight), `false` for emotes/actions
+- **emoji**: Emoji glyph for emote buttons (empty string `""` for eye colors / non-emote buttons)
+- **colorName**: Descriptive name for debug serial output
+- **color**: LED 1&2 color (ignored if `preserveLED12` is `true`)
+- **led3Color**: LED 3 (flashlight) color (ignored if `preserveLED3` is `true`)
+- **preserveLED12**: `true` on emotes (don't touch eyes), `false` on eye colors (set eyes to `color`)
+- **preserveLED3**: `true` on eye colors (don't touch the flashlight), `false` on emotes
 - **scriptNumber**: Maestro script number (0+) or `-1` for none
-- **mp3Track**: MP3 file number (1+) or `-1` for no sound
+- **silent**: `true` to suppress the random-during-animation audio for this emote (e.g. the `sleep` emote), `false` for normal chatter
 
 ### Available Colors
 
@@ -408,29 +398,41 @@ Or use RGB values: `CRGB(255, 128, 0)` for custom colors.
 
 ## MP3 Player Setup
 
+### How audio works in this build
+
+The firmware does **not** assign specific tracks to specific emotes. Instead, while any non-silent emote's Maestro animation is running, the firmware picks a **random track** from the SD card library every time the player goes idle, producing continuous chatter for the duration of the sequence. Tracks that are still playing when the script ends are left to finish naturally; the droid then stays silent until the next emote fires. The library size (currently **250 tracks**) is configured at the top of `src/main.cpp`:
+
+```cpp
+#define AUDIO_TRACK_COUNT 250  // Random selection draws from [1, AUDIO_TRACK_COUNT]
+```
+
+Both **MP3** and **WAV** files are supported by the YX5200-24SS — the chip plays whatever sits at the requested index regardless of extension. Short clips (1–2 s) work especially well, since the random-refill cycle paints over each clip's end with a fresh one.
+
 ### SD Card Preparation
 
-1. **Format**: FAT32 format
-2. **Create folder**: `mp3` or `01`
-3. **Add files**: Name as `0001.mp3`, `0002.mp3`, etc.
-4. **File numbers**: Match the `mp3Track` parameter in emote definitions
+1. **Format the card FAT32.**
+2. **Create a folder named `mp3`** at the root.
+3. **Copy files in numerical order:** `0001.wav`, `0002.wav`, … (or `.mp3` — mixing is fine). The chip indexes by the **file write order on the card**, not by filename, so if you ever delete and replace files in place you may break the mapping. Safest move: reformat and re-copy in numerical order.
+4. **Set `AUDIO_TRACK_COUNT`** in `src/main.cpp` to the number of files you copied.
 
 ### File Structure Example
+
 ```
 SD Card Root
 └── mp3/
-    ├── 0001.mp3  (Track 1 - Happy sound)
-    ├── 0002.mp3  (Track 2 - Angry sound)
-    ├── 0003.mp3  (Track 3 - Sad sound)
-    └── ...
+    ├── 0001.wav   ← random pool: index 1
+    ├── 0002.wav   ← random pool: index 2
+    ├── 0003.mp3   ← random pool: index 3 (mixed format is fine)
+    ├── …
+    └── 0250.wav   ← random pool: index AUDIO_TRACK_COUNT
 ```
 
 ### Troubleshooting MP3 Player
 
 - Check serial monitor for initialization messages
 - Ensure SD card is formatted as FAT32
-- Verify file names follow `000X.mp3` format
-- Check wiring (use 1kΩ resistor on RX line)
+- Verify file names follow `000X.wav` / `000X.mp3` format and were copied in numerical order
+- Confirm `AUDIO_TRACK_COUNT` matches the number of files on the card
 - Try lower volume if sound is distorted
 
 ## Maestro Servo Configuration
@@ -531,7 +533,7 @@ Debug mode shows:
 - Every client connection and disconnection
 - Each emote trigger with full details
 - LED color changes
-- MP3 track playback attempts
+- MP3/WAV track playback attempts
 - Maestro servo commands
 - Eye synchronization warnings (if LEDs 1 & 2 become mismatched)
 
@@ -635,20 +637,14 @@ Connect to this network and navigate to http://192.168.4.1
 ### During Operation (DEBUG_MODE = true - Development)
 
 ```
-New Client.
-Setting emote: happy
-Eyes Green
-Playing MP3 track 2
-Activating maestro sequence 2
-Client disconnected.
+Triggering: happy
+Activating maestro sequence 3
 
-New Client.
-Setting emote: angry
-Eyes Red
-Playing MP3 track 4
-Activating maestro sequence 4
-Client disconnected.
+Triggering: angry
+Activating maestro sequence 0
 ```
+
+(Eye-color log lines only appear when the trigger actually changes eye color — emotes are silent here on that front. Random audio playback isn't logged per-track to keep DEBUG output readable; check `mp3Player.isPlaying()` from a temporary debug print if you need to verify random refill is firing.)
 
 ### Error Messages (Always Shown Regardless of DEBUG_MODE)
 
@@ -756,6 +752,14 @@ External references consulted during development — useful starting points for 
 - [ESP32 Tutorial: Mini MP3 Player Module](https://esp32io.com/tutorials/esp32-mini-mp3-player-module) (wiring, library API walk-through)
 
 ## Version History
+
+- **v1.15**: Random-during-animation audio model; `silent` flag; WAV support documented; idle-mode latent bug fix
+  - **New audio model.** The per-emote `mp3Track` field is gone. While any emote's Maestro animation is running, `loop()` plays a **random track** from the SD card library (1..`AUDIO_TRACK_COUNT`, currently 250) any time the player is idle, producing continuous chatter for the duration of the sequence. Tracks still playing when the animation ends are allowed to finish naturally. Once silent, the system stays silent until the next emote.
+  - **`silent` flag** added to the `Button` struct. `sleep` is the only emote with `silent = true` — it runs its servo sequence without random audio. Everything else defaults to chatty.
+  - **`AUDIO_TRACK_COUNT = 250`** at the top of `src/main.cpp` — tune this to match how many files are on the SD card. Both WAV and MP3 are now documented as supported; the YX5200-24SS plays whatever sits at the requested index regardless of extension.
+  - **`randomSeed(esp_random())`** added at boot. Previously the "random" idle-emote shuffle (and now random audio picks) produced the same sequence after every power-cycle. The hardware RNG fixes that.
+  - **Latent idle-mode bug fix.** Since v1.13 (when all emotes flipped to `preserveLED12 = true`), `idleSequenceRunning` was never cleared in the normal Maestro-available path — idle mode would fire one emote and then hang. The new shared Maestro-status polling block clears it on every script end, which also gives us the hook for the new `animationRunning` state.
+  - **Loop refactor.** A single rate-limited (~150 ms) Maestro-status polling block now drives audio refill, animation-end detection, eye-color restore (still wired up as an extension point even though no current emote uses it), and idle-mode advancement.
 
 - **v1.14**: Swapped audio hardware: DFPlayer Mini → DIYables Mini MP3 Player; per-emote MP3 tracks wired up
   - Library: `DFRobotDFPlayerMini` → `diyables/DIYables_MiniMp3` (in `platformio.ini`). Same UART protocol underneath (both YX5200-based), but the DIYables library has a cleaner API: `setVolume()` instead of `volume()`, `begin()` accepts a `Stream&` and returns `bool` like before, and bonus methods (`isPlaying()`, EQ, looping) are now available if we ever want them.

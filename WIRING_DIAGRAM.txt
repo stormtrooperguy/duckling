@@ -135,7 +135,9 @@ DETAILED COMPONENT CONNECTIONS
    - NO resistor required on the RX line — the YX5200-24SS accepts
      ESP32's 3.3V logic directly (main wiring difference from a
      DFPlayer Mini, which needed a 1kΩ series resistor).
-   - SD card: FAT32 formatted, files at /mp3/0001.mp3 …
+   - SD card: FAT32 formatted, files at /mp3/0001.wav, 0002.wav, …
+     (MP3 and WAV both supported; YX5200 indexes by write order, so
+     copy files in numerical order onto a freshly formatted card)
    - The built-in SPK_1/SPK_2 amp is unused here — it's too weak to
      drive the 36mm speakers usefully. The AUX → external amp chain
      gives much more headroom.
@@ -353,7 +355,8 @@ Wiring Related:
 
 Data Related:
 ❌ SD card not FAT32 formatted
-❌ MP3 files not named correctly (should be 0001.mp3, 0002.mp3, etc.)
+❌ Audio files not named correctly (should be 0001.wav/mp3, 0002.wav/mp3, etc.)
+❌ Audio files written out-of-order on the SD card (chip indexes by write order, not filename)
 ❌ MAESTRO_ENABLED set to false when servos are connected
 
 

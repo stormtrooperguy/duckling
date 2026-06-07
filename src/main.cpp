@@ -22,6 +22,7 @@
 #include <WiFi.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
+#include <esp_system.h>  // esp_random() — hardware RNG for randomSeed()
 
 // *** IMPORTANT: Customize these values for your installation ***
 // Replace these strings to customize for your droid
@@ -76,6 +77,19 @@ HardwareSerial mp3PlayerSerial(MP3_SERIAL_NUM);
 DIYables_MiniMp3 mp3Player;
 bool mp3PlayerAvailable = false;    // Track if MP3 player initialized successfully
 
+// Audio library size — number of files on the SD card (named in order:
+// 0001.wav/mp3, 0002.wav/mp3, …). Random track selection draws from
+// the inclusive range [1, AUDIO_TRACK_COUNT]. The chip indexes by file
+// write order on the card, not by filename; copy files in numerical
+// order onto a freshly formatted FAT32 card.
+#define AUDIO_TRACK_COUNT 250
+
+// True while a Maestro-driven emote animation is in progress. Set by
+// triggerButton() when a non-silent emote with a script is dispatched;
+// cleared in loop() when the Maestro reports the script has stopped.
+// Drives the "play random audio if nothing is playing" logic.
+bool animationRunning = false;
+
 // FastLED library
 #include <FastLED.h>
 
@@ -123,28 +137,35 @@ struct Button {
   bool preserveLED12;      // If true, don't change LEDs 1 & 2
   bool preserveLED3;       // If true, don't change LED 3
   int scriptNumber;        // Maestro script number (-1 = no script)
-  int mp3Track;            // MP3 player track number (-1 = no sound)
+  bool silent;             // If true, suppress random audio during this emote's animation
 };
 
-// EMOTES: Trigger servo sequences (and optionally sound). Eye color is
-// controlled exclusively via the Eye Colors buttons; emotes leave the eyes
-// alone (preserveLED12 = true on every row). The LED1&2 color values below
-// are kept as documentation of each emote's "thematic" color and are NOT
-// applied while preserveLED12 stays true. Flipping a row's preserveLED12 to
-// false re-enables per-emote eye color changes with the documented color.
+// EMOTES: Trigger servo sequences. Eye color is controlled exclusively via
+// the Eye Colors buttons; emotes leave the eyes alone (preserveLED12 = true
+// on every row). The LED1&2 color values are kept as documentation of each
+// emote's "thematic" color and are NOT applied while preserveLED12 stays
+// true. Flipping a row's preserveLED12 to false re-enables per-emote eye
+// color changes with the documented color.
+//
+// Audio: while an emote's Maestro script is running, the loop() picks a
+// random track from the SD card (1..AUDIO_TRACK_COUNT) any time the player
+// is idle, producing continuous chatter for the duration of the animation.
+// Tracks that are still playing when the script ends are allowed to finish
+// naturally. To suppress this for a specific emote, set silent = true.
+//
 // Ordered to match Maestro script programming (0-9).
 const Button emotes[] = {
-  // path        label          emoji  colorName  LED1&2 color       LED3 color    preserve12 preserve3 script# mp3#
-  {"angry",      "angry",       "😠",   "Red",     CRGB::Red,         CRGB::Black,  true,      false,    0,      1},
-  {"curious",    "curious",     "🤔",   "Yellow",  CRGB::Yellow,      CRGB::Black,  true,      false,    1,      2},
-  {"dance",      "dance",       "💃",   "Pink",    CRGB::HotPink,     CRGB::Black,  true,      false,    2,      3},
-  {"happy",      "happy",       "😊",   "Green",   CRGB::Green,       CRGB::Black,  true,      false,    3,      4},
-  {"no",         "no",          "👎",   "Orange",  CRGB::DarkOrange,  CRGB::Black,  true,      false,    4,      5},
-  {"sad",        "sad",         "😢",   "Blue",    CRGB::Blue,        CRGB::Black,  true,      false,    5,      6},
-  {"scared",     "scared",      "😨",   "Purple",  CRGB::Purple,      CRGB::Black,  true,      false,    6,      7},
-  {"sleep",      "go to sleep", "😴",   "Off",     CRGB::Black,       CRGB::Black,  true,      false,    7,      8},
-  {"wake",       "wake up",     "🌅",   "White",   CRGB::White,       CRGB::Black,  true,      false,    8,      9},
-  {"yes",        "yes",         "👍",   "Green",   CRGB::Green,       CRGB::Black,  true,      false,    9,      10}
+  // path        label          emoji  colorName  LED1&2 color       LED3 color    preserve12 preserve3 script# silent
+  {"angry",      "angry",       "😠",   "Red",     CRGB::Red,         CRGB::Black,  true,      false,    0,      false},
+  {"curious",    "curious",     "🤔",   "Yellow",  CRGB::Yellow,      CRGB::Black,  true,      false,    1,      false},
+  {"dance",      "dance",       "💃",   "Pink",    CRGB::HotPink,     CRGB::Black,  true,      false,    2,      false},
+  {"happy",      "happy",       "😊",   "Green",   CRGB::Green,       CRGB::Black,  true,      false,    3,      false},
+  {"no",         "no",          "👎",   "Orange",  CRGB::DarkOrange,  CRGB::Black,  true,      false,    4,      false},
+  {"sad",        "sad",         "😢",   "Blue",    CRGB::Blue,        CRGB::Black,  true,      false,    5,      false},
+  {"scared",     "scared",      "😨",   "Purple",  CRGB::Purple,      CRGB::Black,  true,      false,    6,      false},
+  {"sleep",      "go to sleep", "😴",   "Off",     CRGB::Black,       CRGB::Black,  true,      false,    7,      true },
+  {"wake",       "wake up",     "🌅",   "White",   CRGB::White,       CRGB::Black,  true,      false,    8,      false},
+  {"yes",        "yes",         "👍",   "Green",   CRGB::Green,       CRGB::Black,  true,      false,    9,      false}
 };
 const int numEmotes = sizeof(emotes) / sizeof(emotes[0]);
 
@@ -154,14 +175,14 @@ const int numEmotes = sizeof(emotes) / sizeof(emotes[0]);
 
 // EYE COLORS: Just change eye colors without servo movements (preserves flashlight state)
 const Button eyeColors[] = {
-  // path           label      emoji  colorName  LED1&2 color      LED3 color    preserve12 preserve3 script# mp3#
-  {"color_white",   "white",   "",    "White",   CRGB::White,      CRGB::Black,  false,     true,     -1,     -1},
-  {"color_yellow",  "yellow",  "",    "Yellow",  CRGB::Yellow,     CRGB::Black,  false,     true,     -1,     -1},
-  {"color_orange",  "orange",  "",    "Orange",  CRGB(255,100,0),  CRGB::Black,  false,     true,     -1,     -1},
-  {"color_green",   "green",   "",    "Green",   CRGB::Green,      CRGB::Black,  false,     true,     -1,     -1},
-  {"color_red",     "red",     "",    "Red",     CRGB::Red,        CRGB::Black,  false,     true,     -1,     -1},
-  {"color_blue",    "blue",    "",    "Blue",    CRGB::Blue,       CRGB::Black,  false,     true,     -1,     -1},
-  {"color_purple",  "purple",  "",    "Purple",  CRGB::Purple,     CRGB::Black,  false,     true,     -1,     -1}
+  // path           label      emoji  colorName  LED1&2 color      LED3 color    preserve12 preserve3 script# silent
+  {"color_white",   "white",   "",    "White",   CRGB::White,      CRGB::Black,  false,     true,     -1,     false},
+  {"color_yellow",  "yellow",  "",    "Yellow",  CRGB::Yellow,     CRGB::Black,  false,     true,     -1,     false},
+  {"color_orange",  "orange",  "",    "Orange",  CRGB(255,100,0),  CRGB::Black,  false,     true,     -1,     false},
+  {"color_green",   "green",   "",    "Green",   CRGB::Green,      CRGB::Black,  false,     true,     -1,     false},
+  {"color_red",     "red",     "",    "Red",     CRGB::Red,        CRGB::Black,  false,     true,     -1,     false},
+  {"color_blue",    "blue",    "",    "Blue",    CRGB::Blue,       CRGB::Black,  false,     true,     -1,     false},
+  {"color_purple",  "purple",  "",    "Purple",  CRGB::Purple,     CRGB::Black,  false,     true,     -1,     false}
 };
 const int numEyeColors = sizeof(eyeColors) / sizeof(eyeColors[0]);
 
@@ -220,6 +241,11 @@ void setup() {
     mp3Player.setVolume(20);  // Set volume (0-30)
     mp3PlayerAvailable = true;
   }
+
+  // Seed the random number generator from the ESP32's hardware RNG so the
+  // random audio picks (and the idle-emote shuffle) actually differ across
+  // power-cycles. Without this, you'd get the same "random" sequence every boot.
+  randomSeed(esp_random());
 
   // Initialize FastLED
   FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS);
@@ -370,21 +396,9 @@ void triggerButton(const Button &button, bool fromIdle = false) {
   
   FastLED.show();
   
-  // Play MP3 track if specified (mp3Track >= 0) and player is available
-  if (button.mp3Track >= 0) {
-    if (mp3PlayerAvailable) {
-      #if DEBUG_MODE
-        Serial.print("Playing MP3 track ");
-        Serial.println(button.mp3Track);
-      #endif
-      mp3Player.play(button.mp3Track);
-    } else {
-      // Always show errors/warnings
-      Serial.println("MP3 requested but player not available");
-    }
-  }
-  
-  // Only trigger maestro script if specified (scriptNumber >= 0) and Maestro is available
+  // Trigger maestro script if specified (scriptNumber >= 0) and Maestro is
+  // available. While the script is running, loop() handles random audio
+  // playback — see the AUDIO_TRACK_COUNT comment + the loop() polling block.
   if (button.scriptNumber >= 0) {
     if (maestroAvailable) {
       #if DEBUG_MODE
@@ -392,6 +406,11 @@ void triggerButton(const Button &button, bool fromIdle = false) {
         Serial.println(button.scriptNumber);
       #endif
       maestro.restartScript(button.scriptNumber);
+      // Flag the animation as in progress unless this emote is explicitly
+      // silent. loop() will pick random tracks for the duration.
+      if (!button.silent) {
+        animationRunning = true;
+      }
     } else {
       // Always show errors/warnings
       Serial.println("Maestro script requested but Maestro not available");
@@ -666,22 +685,46 @@ void loop(){
     }
   }
 
-  // Restore eye color once the emote servo sequence finishes (rate-limited polling)
-  if (pendingColorRestore && maestroAvailable && (millis() - lastScriptStatusCheck >= SCRIPT_STATUS_POLL_MS)) {
+  // Rate-limited Maestro poll cycle, shared between three jobs:
+  //   1. Random audio refill: while an emote animation is running, fire a new
+  //      random track whenever the player goes idle. Tracks already playing
+  //      when the animation ends are left to finish naturally — we never stop().
+  //   2. Animation-end detection: clear animationRunning, advance idle mode
+  //      to the next-emote scheduler, and (if pendingColorRestore is set —
+  //      not currently used by any emote, but kept as an extension point)
+  //      restore the pre-emote eye color.
+  //   3. None of this involves the network task, so all hardware ops stay
+  //      single-threaded inside loop().
+  if ((animationRunning || pendingColorRestore) && maestroAvailable &&
+      (millis() - lastScriptStatusCheck >= SCRIPT_STATUS_POLL_MS)) {
     lastScriptStatusCheck = millis();
+
+    // (1) Audio refill — only relevant during an active animation.
+    if (animationRunning && mp3PlayerAvailable && !mp3Player.isPlaying()) {
+      mp3Player.play(random(1, AUDIO_TRACK_COUNT + 1));
+    }
+
+    // (2) Animation-end detection.
     if (maestro.getScriptStatus() == 1) {  // 1 = script stopped
-      noInterrupts();
-      leds[EYE_LED_1] = preEmoteColor;
-      leds[EYE_LED_2] = preEmoteColor;
-      interrupts();
-      FastLED.show();
-      currentEye = preEmotePath;
-      pendingColorRestore = false;
-      if (idleMode) {
+      bool wasAnimation = animationRunning || pendingColorRestore;
+      animationRunning = false;
+
+      if (pendingColorRestore) {
+        noInterrupts();
+        leds[EYE_LED_1] = preEmoteColor;
+        leds[EYE_LED_2] = preEmoteColor;
+        interrupts();
+        FastLED.show();
+        currentEye = preEmotePath;
+        pendingColorRestore = false;
+      }
+
+      if (idleMode && wasAnimation) {
         idleSequenceRunning = false;
         idleNextEmoteTime = millis() + random(IDLE_MIN_DELAY_MS, IDLE_MAX_DELAY_MS);
       }
-      pushStatus();  // Eye-color restored — notify subscribers
+
+      pushStatus();  // Script ended — notify subscribers
     }
   }
 
