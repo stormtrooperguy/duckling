@@ -1,6 +1,6 @@
 # ESP32 Droid Control System
 
-A web-based control system for animatronic droids using ESP32, featuring LED eye control, servo movements via Pololu Maestro, and optional MP3 sound effects via DIYables Mini MP3 Player.
+A web-based control system for animatronic droids using ESP32, featuring LED eye control, servo movements via Pololu Maestro, and optional audio playback via DFPlayer Mini.
 
 ## Features
 
@@ -8,7 +8,7 @@ A web-based control system for animatronic droids using ESP32, featuring LED eye
 - **Web Interface**: Responsive landscape-optimized interface for 8" tablets with fast response times
 - **LED Eye Control**: 3 addressable LEDs in the head (WS2812B/NeoPixel) with per-LED brightness (eyes dimmed for comfort, flashlight at max), plus an inline signal-repeater pixel near the controller
 - **Servo Control**: Optional integration with Pololu Maestro for complex servo sequences
-- **Sound Effects**: Optional DIYables Mini MP3 Player for MP3 audio playback
+- **Sound Effects**: Optional DFPlayer Mini for MP3/WAV audio playback
 - **Modular Design**: Run with any combination of components (LEDs only, LEDs + Servos, full system)
 - **Emotes System**: Pre-configured emotional states that trigger servo movements (and optionally sound). Eye colors are controlled separately via the Eye Colors buttons — emotes don't touch the eyes.
 - **Idle Mode**: Autonomous mode that cycles through emotes in random order with natural timing delays, making the droid look active when not being puppeteered
@@ -22,9 +22,9 @@ A web-based control system for animatronic droids using ESP32, featuring LED eye
 - **ESP32 Development Board**
 - **4x WS2812B/NeoPixel LEDs** (addressable RGB LEDs): 3 in the head (2 eyes + 1 flashlight) plus 1 inline repeater pixel placed near the controller end of the long data run, used to clean up the data signal before it reaches the head. The repeater pixel is held off in firmware and isn't visible in normal operation.
 - **Pololu Maestro Servo Controller** (Mini Maestro) - optional, can be disabled
-- **DIYables Mini MP3 Player** - optional, auto-detected
+- **DFPlayer Mini** - optional, auto-detected (YX5200-based)
 - **MicroSD Card** (for MP3 player, if using audio)
-- **External audio amplifier** (if using audio) — the YX5200-24SS has a small built-in amp on its SPK_1/SPK_2 pins, but for usable volume into anything beyond a tiny piezo speaker you'll want a dedicated amp on the 3.5mm AUX output. This build uses a **DROK 5W+5W Mini Audio Amplifier Board** (PAM8403-class), powered from the 5V rail.
+- **External audio amplifier** (if using audio) — the DFPlayer Mini has a built-in 3W amp on its SPK_1/SPK_2 pins that can drive a small speaker directly, but for usable volume into the 36mm drivers this build uses a dedicated amp wired to the DFPlayer's DAC line-out. This build uses a **DROK 5W+5W Mini Audio Amplifier Board** (PAM8403-class), powered from the 5V rail.
 - **Speakers** (if using audio) — pair of **2.5W, 36mm full-range drivers**, one per amplifier channel. Anything in the 2–5W / 4–8Ω range will work; match the amp's per-channel output.
 - **Power Supply** 18V tool battery expected; 5V input adequate to power lights and sound, but not servos
 
@@ -66,29 +66,32 @@ ESP32 GPIO 16 (RX) → Maestro TX
 ESP32 GND          → Maestro GND
 ```
 
-### DIYables Mini MP3 Player (Serial2)
+### DFPlayer Mini (Serial2)
 ```
 Control / power:
-  ESP32 GPIO 19 (TX)  → MP3 player RX
-  ESP32 GPIO 18 (RX)  → MP3 player TX
-  ESP32 GND           → MP3 player GND
-  5V rail             → MP3 player VCC
+  ESP32 GPIO 19 (TX)  ─[1kΩ]─ DFPlayer RX (pin 2)   ← resistor is REQUIRED
+  ESP32 GPIO 18 (RX)  ──────  DFPlayer TX (pin 3)
+  ESP32 GND           ──────  DFPlayer GND (pin 7 or 10)
+  ESP32 board 5V pin  ──────  DFPlayer VCC (pin 1)  ← tap from ESP32 board, NOT direct from buck
 
-Audio chain (this build uses the AUX out, not the direct speaker pins):
-  MP3 player 3.5mm AUX out  → DROK amplifier AUX in     (3.5mm cable)
+Audio chain (DAC line-out to external amplifier, not the chip's built-in amp):
+  DFPlayer DAC_R (pin 4)     → DROK amplifier R input (line-level)
+  DFPlayer DAC_L (pin 5)     → DROK amplifier L input (line-level)
+  DFPlayer GND               → DROK amplifier GND (audio ground)
   5V rail                    → DROK amplifier VCC
-  GND                        → DROK amplifier GND
-  DROK amplifier L+ / L−    → Left speaker  (2.5W, 36mm)
-  DROK amplifier R+ / R−    → Right speaker (2.5W, 36mm)
+  DROK amplifier L+ / L−     → Left speaker  (2.5W, 36mm)
+  DROK amplifier R+ / R−     → Right speaker (2.5W, 36mm)
 
-  (MP3 player SPK_1 / SPK_2 unused in this build — direct-drive would
-   work for very small / efficient speakers but not for these.)
+  (DFPlayer SPK_1 / SPK_2 unused — the chip's built-in 3W amp is fine for
+   tiny speakers but the DROK + 36mm drivers gives us much more headroom.)
 ```
 
 **Note**:
-- No series resistor is required on the MP3 player's RX line — the YX5200-24SS accepts ESP32's 3.3V logic directly. (This is the main wiring difference from a DFPlayer Mini.)
+- The **1 kΩ resistor on the DFPlayer's RX line is required.** Without it, the chip's 5V-logic input clamp diodes can draw damaging current from the ESP32's 3.3V output during power-on sequencing (when the DFPlayer's VCC is still ramping up). One quarter-watt 1kΩ resistor in series, ESP32 side; no resistor needed on the TX (DFPlayer→ESP32) direction.
+- **Tap DFPlayer VCC from the ESP32 board's 5V pin, not a separate flying wire from the buck converter.** The DFPlayer's init handshake is sensitive to power-rail quality; the ESP32 board has bypass caps that clean things up. A direct wire from the buck converter caused intermittent init failures during bring-up.
 - GPIO 18 and 19 are safe general-purpose pins that won't conflict with flash memory. (They're the chip's default VSPI CLK/MISO pins, but VSPI is never explicitly initialized in this firmware, so the pins are free for UART use.)
-- The amplifier and MP3 player share the 5V rail. Class-D amps switch hard and can inject supply noise; if you hear hiss/whine through the speakers, add a small bulk cap (100–470µF) right at the amp's VCC pin.
+- **TX/RX silkscreen labels on DFPlayer Mini boards are notoriously inconsistent across manufacturers.** If `mp3Player.begin()` fails at boot, swap the two data wires at the DFPlayer side as the first thing you try.
+- The amplifier and DFPlayer share the 5V rail. Class-D amps switch hard and can inject supply noise; if you hear hiss/whine through the speakers, add a small bulk cap (100–470µF) right at the amp's VCC pin.
 
 ## Software Requirements
 
@@ -116,7 +119,7 @@ The first `pio run` will download all dependencies into `.pio/` (gitignored). De
 
 - `FastLED` — LED control (^3.7.0)
 - `PololuMaestro` — servo controller (^1.0.0)
-- `DIYables_MiniMp3` — MP3 player (^1.0.0)
+- `DFRobotDFPlayerMini` — MP3 player (^1.0.6)
 
 Adjust `upload_port` / `monitor_port` in `platformio.ini` if your board enumerates as a different serial device.
 
@@ -195,10 +198,10 @@ All serial port settings are centralized at the top of the sketch for easy confi
 #define MAESTRO_TX_PIN 17         // ESP32 TX (connects to Maestro RX)
 #define MAESTRO_BAUD 9600
 
-// DIYables Mini MP3 Player
+// DFPlayer Mini
 #define MP3_SERIAL_NUM 2          // Use Serial2
-#define MP3_RX_PIN 18             // ESP32 RX (connects to MP3 player TX)
-#define MP3_TX_PIN 19             // ESP32 TX (connects to MP3 player RX)
+#define MP3_RX_PIN 18             // ESP32 RX (connects to DFPlayer TX)
+#define MP3_TX_PIN 19             // ESP32 TX (connects to DFPlayer RX via 1kΩ)
 #define MP3_BAUD 9600
 ```
 
@@ -406,34 +409,47 @@ The firmware does **not** assign specific tracks to specific emotes. Instead, wh
 #define AUDIO_TRACK_COUNT 250  // Random selection draws from [1, AUDIO_TRACK_COUNT]
 ```
 
-Both **MP3** and **WAV** files are supported by the YX5200-24SS — the chip plays whatever sits at the requested index regardless of extension. Short clips (1–2 s) work especially well, since the random-refill cycle paints over each clip's end with a fresh one.
+Both **MP3** and **WAV** files are supported, but **WAV files must be 16-bit signed PCM**, mono or stereo, at 8–44.1 kHz. IEEE Float WAV (the default macOS afconvert output), ADPCM-compressed WAV, and >44.1 kHz sample rates are **not** decoded — the chip will accept the play command and report "playing" but produce silence. If you have non-spec WAVs, convert them first (see below). Short clips (1–2 s) work especially well, since the random-refill cycle paints over each clip's end with a fresh one.
 
 ### SD Card Preparation
 
-1. **Format the card FAT32.**
+1. **Format the card FAT32.** Cards ≤32 GB work best. macOS's default `diskutil eraseDisk MS-DOS FAT32 DROIDSD MBRFormat /dev/diskN` is fine.
 2. **Create a folder named `mp3`** at the root.
-3. **Copy files in numerical order:** `0001.wav`, `0002.wav`, … (or `.mp3` — mixing is fine). The chip indexes by the **file write order on the card**, not by filename, so if you ever delete and replace files in place you may break the mapping. Safest move: reformat and re-copy in numerical order.
-4. **Set `AUDIO_TRACK_COUNT`** in `src/main.cpp` to the number of files you copied.
+3. **Copy files into `/mp3/` in numerical order:** `0001.wav`, `0002.wav`, …. The firmware uses `playMp3Folder(N)` which addresses `/mp3/000N.*` by filename, so write order on the card doesn't strictly matter — but copying in order is still good hygiene.
+4. **Set `AUDIO_TRACK_COUNT`** in `src/main.cpp` to the number of files you have.
+
+### Converting WAVs to YX5200-compatible format
+
+If your source audio is in a non-spec format (high sample rate, float, surround, etc.), use macOS's built-in `afconvert` to re-encode in place:
+
+```bash
+afconvert -f WAVE -d LEI16@22050 -c 1 input.wav output.wav
+#                  ^         ^   ^
+#                  |         |   1 channel (mono)
+#                  |         22050 Hz sample rate
+#                  Little-Endian Integer 16-bit (signed PCM)
+```
+
+For batch conversion of a whole folder, see the patterns in `tools/` or write a quick `for f in *.wav; do afconvert ... ; done` loop. 16-bit / 22.05 kHz / mono produces audibly clean droid-style chatter at about 18 KB per second — plenty small even for tiny SD cards.
 
 ### File Structure Example
 
 ```
 SD Card Root
 └── mp3/
-    ├── 0001.wav   ← random pool: index 1
-    ├── 0002.wav   ← random pool: index 2
-    ├── 0003.mp3   ← random pool: index 3 (mixed format is fine)
+    ├── 0001.wav   ← /mp3/0001.wav, addressed by playMp3Folder(1)
+    ├── 0002.wav   ← /mp3/0002.wav
+    ├── 0003.mp3   ← mixed format is fine
     ├── …
-    └── 0250.wav   ← random pool: index AUDIO_TRACK_COUNT
+    └── 0250.wav
 ```
 
 ### Troubleshooting MP3 Player
 
-- Check serial monitor for initialization messages
-- Ensure SD card is formatted as FAT32
-- Verify file names follow `000X.wav` / `000X.mp3` format and were copied in numerical order
-- Confirm `AUDIO_TRACK_COUNT` matches the number of files on the card
-- Try lower volume if sound is distorted
+- **Init fails (`begin()` returns false):** check the 1 kΩ resistor is in place on the RX line. If still failing, swap RX/TX wires at the DFPlayer side — silkscreen labels are inconsistent across DFPlayer Mini manufacturers. Verify VCC is from the ESP32 board's 5V pin, not a flying wire off the buck.
+- **Init succeeds but no audio at all:** check that the SD card is FAT32, the `mp3` folder exists at root, and files are named exactly `0001.xxx` …. Confirm WAV files are 16-bit PCM (use `file 0001.wav` — it should say `Microsoft PCM, 16 bit`, not `IEEE Float`).
+- **Audio plays for a few tracks then stops, ESP32 resets:** brownout from current draw. Move from USB power to the buck converter, or reduce volume.
+- **Volume too quiet:** the production firmware sets `volume(30)` (max). Adjust in `setup()` if needed.
 
 ## Maestro Servo Configuration
 
@@ -601,7 +617,7 @@ Debug mode shows:
 - Verify SD card is inserted and formatted (FAT32)
 - Check speaker connections
 - Adjust volume: `mp3Player.setVolume(25);`
-- No series resistor is required on the YX5200-24SS RX line (it accepts 3.3V logic directly)
+- A 1 kΩ resistor is required in series on the DFPlayer's RX line (between ESP32 GPIO 19 and DFPlayer pin 2)
 
 **Problem**: Wrong track plays
 - Verify file naming: `0001.mp3`, `0002.mp3`, etc.
@@ -723,13 +739,13 @@ This system is designed to run from an **18V battery** with buck converters:
 This project uses the following open-source libraries:
 - FastLED (MIT License)
 - PololuMaestro (MIT License)
-- DIYables_MiniMp3 (MIT License)
+- DFRobotDFPlayerMini (MIT License)
 
 ## Credits
 
 - FastLED Library: Daniel Garcia
 - PololuMaestro Library: Pololu Corporation
-- DIYables_MiniMp3 Library: DIYables
+- DFRobotDFPlayerMini Library: DFRobot
 - WiFi Web Server Example: Rui Santos (randomnerdtutorials.com)
 
 ## Support
@@ -744,7 +760,13 @@ For issues or questions:
 
 External references consulted during development — useful starting points for hardware datasheets, library docs, and integration notes when extending the system.
 
-### DIYables Mini MP3 Player (v1.14)
+### DFPlayer Mini (v1.17)
+
+- [DFRobot Wiki — DFPlayer Mini SKU:DFR0299](https://wiki.dfrobot.com/DFPlayer_Mini_SKU_DFR0299) (datasheet, pinout, library)
+- [DFRobotDFPlayerMini — GitHub repository](https://github.com/DFRobot/DFRobotDFPlayerMini) (library source, examples, notification types)
+- [PlatformIO Registry — dfrobot/DFRobotDFPlayerMini](https://registry.platformio.org/libraries/dfrobot/DFRobotDFPlayerMini)
+
+### DIYables Mini MP3 Player (v1.14, reverted v1.17 — kept for reference)
 
 - [DIYables Mini MP3 Player Module — product page](https://diyables.io/products/mp3-player-module)
 - [DIYables-Mini-Mp3 — GitHub repository](https://github.com/DIYables/DIYables-Mini-Mp3) (library source, examples, API header)
@@ -752,6 +774,17 @@ External references consulted during development — useful starting points for 
 - [ESP32 Tutorial: Mini MP3 Player Module](https://esp32io.com/tutorials/esp32-mini-mp3-player-module) (wiring, library API walk-through)
 
 ## Version History
+
+- **v1.17**: Reverted audio hardware to DFPlayer Mini; switched to notification-driven audio refill; documented WAV format requirements
+  - **Hardware change:** swapped DIYables Mini MP3 Player back to DFPlayer Mini. The DIYables module's SD subsystem refused to enumerate files on multiple cards across two units we tested (`getTrackCount` consistently returned 0 even with valid FAT16/FAT32 cards), making it unusable for this build. The DFPlayer Mini works reliably with the same cards. Trade-off: lose the DIYables's 3.5mm AUX jack, but the DFPlayer's DAC_R/DAC_L pads feed the external DROK amp just as well.
+  - **Library:** `diyables/DIYables_MiniMp3` → `dfrobot/DFRobotDFPlayerMini` in `platformio.ini`. The DFRobot library's `begin()` actually handshakes with the chip (returns real success/failure), which makes diagnostics meaningful again.
+  - **Audio refill rewritten:** replaced the broken `isPlaying()` polling with event-driven `DFPlayerPlayFinished` notifications consumed via `mp3Player.available()`. The chip emits a packet every time a track ends; we listen for it and immediately fire the next random track if `animationRunning` is still true. Cleaner, faster, and doesn't rely on query commands that lie.
+  - **Track addressing:** `playFromMP3Folder(N)` → `playMp3Folder(N)` (DFRobot library's equivalent). Both reference `/mp3/000N.*` by name, so write order on the card no longer matters.
+  - **Wiring change — 1 kΩ resistor on the RX line is REQUIRED again** (was dropped in v1.14 when switching to DIYables). The DFPlayer's 5V-logic input clamp diodes can draw damaging current from ESP32's 3.3V output during power-on sequencing without it.
+  - **Wiring change — DFPlayer VCC must be tapped from the ESP32 board's 5V pin**, not a separate flying wire from the buck converter. The DFPlayer's init handshake is sensitive to power-rail noise; the ESP32 board's bypass caps clean things up enough to make init reliable.
+  - **Documented gotcha:** TX/RX silkscreen labels on DFPlayer Mini boards are inconsistent across manufacturers. If `begin()` fails, swap the data wires before suspecting anything else.
+  - **WAV files must be 16-bit signed PCM** (not IEEE Float, not ADPCM) at ≤44.1 kHz. macOS's `afconvert -f WAVE -d LEI16@22050 -c 1` produces correct files; the README has the full incantation.
+  - Diagnostic instrumentation from v1.16.x debug builds removed. RAM/Flash usage returns to pre-debug baseline.
 
 - **v1.16**: Moved MP3 player UART to GPIO 18 (RX) / GPIO 19 (TX)
   - Previously on GPIO 25/26 — both pin pairs are safe general-purpose pins; the move was driven by physical layout convenience on the droid's wiring harness, not by anything wrong with 25/26.

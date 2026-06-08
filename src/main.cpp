@@ -12,7 +12,7 @@
   - Web interface optimized for landscape tablets
   - FastLED control for addressable RGB LEDs
   - Pololu Maestro servo controller integration
-  - DIYables Mini MP3 player support (YX5200-24SS)
+  - DFPlayer Mini audio support with random-during-animation playback
   - Multiple emotes with coordinated LEDs, sounds, and servos
   - Performance optimized HTTP handling
   - Debug mode for development and troubleshooting
@@ -46,13 +46,23 @@ const char* ap_password = "changeme";    // Change to a secure password!
 #define MAESTRO_TX_PIN 17         // ESP32 TX (connects to Maestro RX)
 #define MAESTRO_BAUD 9600
 
-// DIYables Mini MP3 Player (YX5200-24SS) — same UART protocol as DFPlayer Mini
-// but with a tidier library API and 3.3V-tolerant logic (no series resistor needed).
-// GPIO 18/19 are the chip's default VSPI CLK/MISO pins; that's only a concern if
-// SPI is ever explicitly initialized in this firmware, which it isn't.
+// DFPlayer Mini (YX5200-based) — UART control.
+// IMPORTANT: a 1kΩ series resistor is required on the MP3 player's RX line
+// (between ESP32 GPIO 19 and DFPlayer's RX pin). DFPlayer's input has 5V-logic
+// internal clamp diodes; ESP32 drives 3.3V. Without the resistor, current can
+// flow through the clamp diode during power-up sequencing and damage either
+// the DFPlayer's input or the ESP32's GPIO driver. See WIRING_DIAGRAM.txt.
+//
+// IMPORTANT: tap the DFPlayer's VCC from the ESP32 expansion board's 5V rail
+// (not directly from a flying wire off the buck converter). The DFPlayer's
+// chip handshake at init is sensitive to power quality; the expansion board's
+// rail is cleaner thanks to the ESP32's onboard regulator and bypass caps.
+//
+// GPIO 18/19 are the chip's default VSPI CLK/MISO pins; that's only a concern
+// if SPI is ever explicitly initialized in this firmware, which it isn't.
 #define MP3_SERIAL_NUM 2          // Use Serial2
-#define MP3_RX_PIN 18             // ESP32 RX (connects to MP3 player TX)
-#define MP3_TX_PIN 19             // ESP32 TX (connects to MP3 player RX)
+#define MP3_RX_PIN 18             // ESP32 RX (connects to DFPlayer TX)
+#define MP3_TX_PIN 19             // ESP32 TX (connects to DFPlayer RX, through 1kΩ)
 #define MP3_BAUD 9600
 
 // NOTE: GPIO 6-11 are used for SPI flash and will cause boot issues on most
@@ -74,17 +84,27 @@ bool maestroAvailable = MAESTRO_ENABLED;  // Track if Maestro is available
 struct ActionMsg { char path[ACTION_PATH_MAX]; };
 QueueHandle_t actionQueue = NULL;
 
-// DIYables Mini MP3 Player library
-#include <DIYables_MiniMp3.h>
+// DFPlayer Mini library
+#include <DFRobotDFPlayerMini.h>
 HardwareSerial mp3PlayerSerial(MP3_SERIAL_NUM);
-DIYables_MiniMp3 mp3Player;
+DFRobotDFPlayerMini mp3Player;
 bool mp3PlayerAvailable = false;    // Track if MP3 player initialized successfully
 
-// Audio library size — number of files on the SD card (named in order:
-// 0001.wav/mp3, 0002.wav/mp3, …). Random track selection draws from
-// the inclusive range [1, AUDIO_TRACK_COUNT]. The chip indexes by file
-// write order on the card, not by filename; copy files in numerical
-// order onto a freshly formatted FAT32 card.
+// Track whether the DFPlayer is currently playing a track. Updated by the
+// chip's track-finished notifications drained in loop(); used by the audio
+// refill logic to decide when to fire the next random track. We trust this
+// instead of polling mp3Player.readState() / isPlaying() — those queries
+// returned unreliable values on this chip variant during bring-up.
+bool audioPlaying = false;
+
+// Audio library size — number of files on the SD card named /mp3/0001.*
+// through /mp3/AUDIO_TRACK_COUNT.*. Random track selection draws from the
+// inclusive range [1, AUDIO_TRACK_COUNT]. We use playMp3Folder(N) which
+// addresses /mp3/000N.* by name — robust to file write order on the card.
+//
+// Tested working with WAV files (PCM 16-bit mono 22050 Hz) prepared via:
+//   afconvert -f WAVE -d LEI16@22050 -c 1 input.wav output.wav
+// MP3 files work too. See README "MP3 Player Setup" for full prep details.
 #define AUDIO_TRACK_COUNT 250
 
 // True while a Maestro-driven emote animation is in progress. Set by
@@ -234,6 +254,10 @@ void setup() {
 
   // Initialize MP3 Player Serial Connection
   mp3PlayerSerial.begin(MP3_BAUD, SERIAL_8N1, MP3_RX_PIN, MP3_TX_PIN);
+  // Give the DFPlayer chip a moment to finish its own boot sequence before
+  // we handshake with it. Buck-converter power-up can be slower than USB,
+  // and begin() will time out if the chip isn't ready yet.
+  delay(2000);
   Serial.println("Initializing MP3 player...");
   if (!mp3Player.begin(mp3PlayerSerial)) {
     Serial.println("MP3 player initialization failed!");
@@ -241,7 +265,7 @@ void setup() {
     mp3PlayerAvailable = false;
   } else {
     Serial.println("MP3 player initialized successfully");
-    mp3Player.setVolume(20);  // Set volume (0-30)
+    mp3Player.volume(30);  // 0..30; 30 = max
     mp3PlayerAvailable = true;
   }
 
@@ -688,26 +712,39 @@ void loop(){
     }
   }
 
-  // Rate-limited Maestro poll cycle, shared between three jobs:
-  //   1. Random audio refill: while an emote animation is running, fire a new
-  //      random track whenever the player goes idle. Tracks already playing
-  //      when the animation ends are left to finish naturally — we never stop().
-  //   2. Animation-end detection: clear animationRunning, advance idle mode
-  //      to the next-emote scheduler, and (if pendingColorRestore is set —
-  //      not currently used by any emote, but kept as an extension point)
-  //      restore the pre-emote eye color.
-  //   3. None of this involves the network task, so all hardware ops stay
-  //      single-threaded inside loop().
+  // Drain DFPlayer asynchronous notifications every loop iteration. The chip
+  // sends a "track finished" packet (DFPlayerPlayFinished) when it stops
+  // decoding — that's our cue to refill if we're still mid-animation. We
+  // also drop the audioPlaying flag on errors so a failed track doesn't
+  // leave us stuck thinking something's playing.
+  if (mp3PlayerAvailable && mp3Player.available()) {
+    uint8_t type = mp3Player.readType();
+    int value = mp3Player.read();
+    (void)value;  // unused; future use: log specific error codes
+    if (type == DFPlayerPlayFinished || type == DFPlayerError) {
+      audioPlaying = false;
+    }
+  }
+
+  // Audio refill: while an emote animation is running, fire a new random
+  // track whenever the player has gone idle. Tracks already playing when
+  // the animation ends are left to finish naturally — we never stop().
+  if (animationRunning && mp3PlayerAvailable && !audioPlaying) {
+    int track = random(1, AUDIO_TRACK_COUNT + 1);
+    mp3Player.playMp3Folder(track);
+    audioPlaying = true;
+  }
+
+  // Rate-limited Maestro poll cycle: detect animation end, advance idle
+  // mode to the next-emote scheduler, and (if pendingColorRestore is set —
+  // not currently used by any emote, but kept as an extension point)
+  // restore the pre-emote eye color. All hardware ops stay single-threaded
+  // inside loop() — no concurrent access with the async network task.
   if ((animationRunning || pendingColorRestore) && maestroAvailable &&
       (millis() - lastScriptStatusCheck >= SCRIPT_STATUS_POLL_MS)) {
     lastScriptStatusCheck = millis();
 
-    // (1) Audio refill — only relevant during an active animation.
-    if (animationRunning && mp3PlayerAvailable && !mp3Player.isPlaying()) {
-      mp3Player.play(random(1, AUDIO_TRACK_COUNT + 1));
-    }
-
-    // (2) Animation-end detection.
+    // Animation-end detection.
     if (maestro.getScriptStatus() == 1) {  // 1 = script stopped
       bool wasAnimation = animationRunning || pendingColorRestore;
       animationRunning = false;
