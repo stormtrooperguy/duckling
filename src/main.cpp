@@ -132,7 +132,7 @@ bool animationRunning = false;
 CRGB leds[NUM_LEDS];
 
 // LED Brightness settings (0-255)
-#define EYE_BRIGHTNESS 50        // Brightness for LEDs 1 & 2 (eyes) - comfortable viewing
+#define EYE_BRIGHTNESS 100       // Brightness for LEDs 1 & 2 (eyes) - comfortable viewing
 #define FLASHLIGHT_BRIGHTNESS 255 // Brightness for LED 3 (flashlight) - maximum
 
 // Idle mode timing
@@ -370,8 +370,11 @@ void verifyEyeSync() {
 
 // Helper function to trigger button action (emote or action)
 void triggerButton(const Button &button, bool fromIdle = false) {
-  // Any user-initiated trigger cancels idle mode
-  if (!fromIdle) {
+  // Emotes (anything with a Maestro script) cancel idle mode — the user is
+  // taking direct control. Eye-color buttons (scriptNumber < 0) don't cancel
+  // idle so the operator can tweak the eye color mid-idle without restarting
+  // the cycle.
+  if (!fromIdle && button.scriptNumber >= 0) {
     idleMode = false;
     idleSequenceRunning = false;
   }

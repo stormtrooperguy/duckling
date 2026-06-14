@@ -234,12 +234,12 @@ mp3Player.setVolume(20);  // Default: 20
 
 The system uses **per-LED brightness control** for optimal viewing:
 
-- **Eyes (LEDs 1 & 2)**: Brightness **50** (comfortable for viewing)
+- **Eyes (LEDs 1 & 2)**: Brightness **100** (comfortable for viewing)
 - **Flashlight (LED 3)**: Brightness **255** (maximum brightness)
 
 To adjust these values, modify the constants at the top of the sketch:
 ```cpp
-#define EYE_BRIGHTNESS 50        // Brightness for eyes (0-255)
+#define EYE_BRIGHTNESS 100       // Brightness for eyes (0-255)
 #define FLASHLIGHT_BRIGHTNESS 255 // Brightness for flashlight (0-255)
 ```
 
@@ -303,7 +303,7 @@ Idle mode makes the droid appear active when no one is puppeteering it. When ena
 - The droid automatically fires emotes in randomized order, cycling through all 10 emotes before repeating
 - Delays between emotes are randomized (6–15 seconds from the start of one emote to the start of the next), producing natural-looking timing
 - Eyes are not touched during idle — whatever color the operator last set remains throughout
-- Idle mode stops automatically if any emote button or eye color button is pressed
+- Idle mode stops automatically if any **emote** button is pressed (the operator is taking over). **Eye color** changes do not stop idle — you can tweak the eye color mid-idle and the cycle keeps running
 - Flip the **Idle Mode** toggle off to stop manually
 
 Idle mode timing is configured with two constants at the top of the sketch:
@@ -634,7 +634,7 @@ Monitor debugging info at 115200 baud:
 Maestro serial initialized
 Initializing MP3 player...
 MP3 player initialized successfully
-Eyes initialized to orange (brightness 50)
+Eyes initialized to orange (brightness 100)
 Configuring Access Point...
 Access Point started!
 SSID: YourDroidName
@@ -700,12 +700,12 @@ This system is designed to run from an **18V battery** with buck converters:
 - **ESP32**: ~500mA (WiFi active)
 - **LED Strip**:
   - Repeater (1 LED held off): ~1mA quiescent
-  - Eyes (2 LEDs at brightness 50): ~24mA
+  - Eyes (2 LEDs at brightness 100): ~48mA
   - Flashlight (1 LED at max brightness 255): ~60mA
-  - **Total LEDs**: ~85mA typical
+  - **Total LEDs**: ~110mA typical
 - **MP3 player**: ~50mA
 - **Audio amplifier** (DROK 5W+5W, PAM8403-class): ~20mA idle, ~100–400mA at typical sound-effect volume, up to ~3A at sustained full output. Most droid sound effects are short and well under peak, so plan for ~300mA typical.
-- **Total 5V**: ~950mA typical with audio active (recommend 2A+ converter for headroom; 3A+ if you anticipate driving the amp near full power)
+- **Total 5V**: ~975mA typical with audio active (recommend 2A+ converter for headroom; 3A+ if you anticipate driving the amp near full power)
 
 **8V Rail (from second buck converter):**
 - **Servos**: Varies by servo type and quantity
@@ -774,6 +774,12 @@ External references consulted during development — useful starting points for 
 - [ESP32 Tutorial: Mini MP3 Player Module](https://esp32io.com/tutorials/esp32-mini-mp3-player-module) (wiring, library API walk-through)
 
 ## Version History
+
+- **v1.18**: Eye brightness 50 → 100; eye-color buttons no longer cancel idle mode
+  - `EYE_BRIGHTNESS` raised from 50 → 100 so the eyes read more clearly under typical lighting.
+  - Eye-color buttons no longer kick the droid out of idle mode. The operator can now tweak the eye color mid-idle (e.g., adjusting from default orange to angry red while the droid keeps cycling emotes) without having to re-engage the idle toggle. Emote buttons still cancel idle as before — that signals the operator is taking over.
+  - Implementation: the idle-cancel branch in `triggerButton()` now gates on `button.scriptNumber >= 0`, so only buttons with a Maestro script (i.e. emotes) cancel idle. Eye colors have `scriptNumber = -1` and fall through without disturbing idle state.
+  - Updated power budget: eye LED current ~24 mA → ~48 mA at double brightness.
 
 - **v1.17**: Reverted audio hardware to DFPlayer Mini; switched to notification-driven audio refill; documented WAV format requirements
   - **Hardware change:** swapped DIYables Mini MP3 Player back to DFPlayer Mini. The DIYables module's SD subsystem refused to enumerate files on multiple cards across two units we tested (`getTrackCount` consistently returned 0 even with valid FAT16/FAT32 cards), making it unusable for this build. The DFPlayer Mini works reliably with the same cards. Trade-off: lose the DIYables's 3.5mm AUX jack, but the DFPlayer's DAC_R/DAC_L pads feed the external DROK amp just as well.
