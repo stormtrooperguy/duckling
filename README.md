@@ -432,6 +432,16 @@ afconvert -f WAVE -d LEI16@22050 -c 1 input.wav output.wav
 
 For batch conversion of a whole folder, see the patterns in `tools/` or write a quick `for f in *.wav; do afconvert ... ; done` loop. 16-bit / 22.05 kHz / mono produces audibly clean droid-style chatter at about 18 KB per second — plenty small even for tiny SD cards.
 
+### Auditioning the clip library
+
+After conversion you'll often want to weed out clips that didn't survive transcoding or were always bad to begin with. `tools/audition.py` walks a folder of audio files, plays each through `afplay`, and prompts you for a keep/delete verdict. "Delete" actually moves the file into a sibling `_trash/` folder so you can restore mistakes:
+
+```bash
+python3 tools/audition.py /path/to/sounds_sd_yx5200/
+```
+
+Controls per file: **Enter**/**k** to keep, **d** to trash, **r** to replay, **s** to skip, **q** to quit. Use `--start N` to resume from a given index if you quit partway through.
+
 ### File Structure Example
 
 ```
