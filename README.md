@@ -1,6 +1,6 @@
 # ESP32 Droid Control System
 
-A web-based control system for animatronic droids using ESP32, featuring LED eye control, servo movements via Pololu Maestro, and optional audio playback via DFPlayer Mini.
+A web-based control system for animatronic droids using ESP32, featuring LED eye control, servo movements via Pololu Maestro, and optional audio playback via DFPlayer Pro.
 
 ## Features
 
@@ -8,7 +8,7 @@ A web-based control system for animatronic droids using ESP32, featuring LED eye
 - **Web Interface**: Responsive landscape-optimized interface for 8" tablets with fast response times
 - **LED Eye Control**: 3 addressable LEDs in the head (WS2812B/NeoPixel) with per-LED brightness (eyes dimmed for comfort, flashlight at max), plus an inline signal-repeater pixel near the controller
 - **Servo Control**: Optional integration with Pololu Maestro for complex servo sequences
-- **Sound Effects**: Optional DFPlayer Mini for MP3/WAV audio playback
+- **Sound Effects**: Optional DFPlayer Pro (onboard 128 MB flash, no SD card needed) for MP3/WAV/FLAC/AAC/WMA/APE audio playback
 - **Modular Design**: Run with any combination of components (LEDs only, LEDs + Servos, full system)
 - **Emotes System**: Pre-configured emotional states that trigger servo movements (and optionally sound). Eye colors are controlled separately via the Eye Colors buttons — emotes don't touch the eyes.
 - **Idle Mode**: Autonomous mode that cycles through emotes in random order with natural timing delays, making the droid look active when not being puppeteered
@@ -22,9 +22,8 @@ A web-based control system for animatronic droids using ESP32, featuring LED eye
 - **ESP32 Development Board**
 - **4x WS2812B/NeoPixel LEDs** (addressable RGB LEDs): 3 in the head (2 eyes + 1 flashlight) plus 1 inline repeater pixel placed near the controller end of the long data run, used to clean up the data signal before it reaches the head. The repeater pixel is held off in firmware and isn't visible in normal operation.
 - **Pololu Maestro Servo Controller** (Mini Maestro) - optional, can be disabled
-- **DFPlayer Mini** - optional, auto-detected (YX5200-based)
-- **MicroSD Card** (for MP3 player, if using audio)
-- **External audio amplifier** (if using audio) — the DFPlayer Mini has a built-in 3W amp on its SPK_1/SPK_2 pins that can drive a small speaker directly, but for usable volume into the 36mm drivers this build uses a dedicated amp wired to the DFPlayer's DAC line-out. This build uses a **DROK 5W+5W Mini Audio Amplifier Board** (PAM8403-class), powered from the 5V rail.
+- **DFPlayer Pro** (DFRobot DFR0768) - optional, auto-detected. 128 MB onboard flash, USB-C for file loading, supports MP3 / WAV / FLAC / AAC / WMA / APE.
+- **External audio amplifier** (if using audio) — the DFPlayer Pro has a built-in 3W amp on its SPK_1/SPK_2 pins that can drive a small speaker directly, but for usable volume into the 36mm drivers this build uses a dedicated amp wired to the DFPlayer's DAC line-out. This build uses a **DROK 5W+5W Mini Audio Amplifier Board** (PAM8403-class), powered from the 5V rail.
 - **Speakers** (if using audio) — pair of **2.5W, 36mm full-range drivers**, one per amplifier channel. Anything in the 2–5W / 4–8Ω range will work; match the amp's per-channel output.
 - **Power Supply** 18V tool battery expected; 5V input adequate to power lights and sound, but not servos
 
@@ -66,31 +65,31 @@ ESP32 GPIO 16 (RX) → Maestro TX
 ESP32 GND          → Maestro GND
 ```
 
-### DFPlayer Mini (Serial2)
+### DFPlayer Pro (Serial2)
 ```
 Control / power:
-  ESP32 GPIO 19 (TX)  ─[1kΩ]─ DFPlayer RX (pin 2)   ← resistor is REQUIRED
-  ESP32 GPIO 18 (RX)  ──────  DFPlayer TX (pin 3)
-  ESP32 GND           ──────  DFPlayer GND (pin 7 or 10)
-  ESP32 board 5V pin  ──────  DFPlayer VCC (pin 1)  ← tap from ESP32 board, NOT direct from buck
+  ESP32 GPIO 19 (TX)  ────── DFPlayer Pro RX     ← no resistor needed
+  ESP32 GPIO 18 (RX)  ────── DFPlayer Pro TX
+  ESP32 GND           ────── DFPlayer Pro GND
+  5V rail             ────── DFPlayer Pro VIN
 
 Audio chain (DAC line-out to external amplifier, not the chip's built-in amp):
-  DFPlayer DAC_R (pin 4)     → DROK amplifier R input (line-level)
-  DFPlayer DAC_L (pin 5)     → DROK amplifier L input (line-level)
-  DFPlayer GND               → DROK amplifier GND (audio ground)
+  DFPlayer Pro DAC_R         → DROK amplifier R input (line-level)
+  DFPlayer Pro DAC_L         → DROK amplifier L input (line-level)
+  DFPlayer Pro GND           → DROK amplifier GND (audio ground)
   5V rail                    → DROK amplifier VCC
   DROK amplifier L+ / L−     → Left speaker  (2.5W, 36mm)
   DROK amplifier R+ / R−     → Right speaker (2.5W, 36mm)
 
-  (DFPlayer SPK_1 / SPK_2 unused — the chip's built-in 3W amp is fine for
-   tiny speakers but the DROK + 36mm drivers gives us much more headroom.)
+File loading: connect the DFPlayer Pro to a Mac via USB-C; it mounts as
+a removable drive. Drop / replace files at the root, eject, reset.
 ```
 
 **Note**:
-- The **1 kΩ resistor on the DFPlayer's RX line is required.** Without it, the chip's 5V-logic input clamp diodes can draw damaging current from the ESP32's 3.3V output during power-on sequencing (when the DFPlayer's VCC is still ramping up). One quarter-watt 1kΩ resistor in series, ESP32 side; no resistor needed on the TX (DFPlayer→ESP32) direction.
-- **Tap DFPlayer VCC from the ESP32 board's 5V pin, not a separate flying wire from the buck converter.** The DFPlayer's init handshake is sensitive to power-rail quality; the ESP32 board has bypass caps that clean things up. A direct wire from the buck converter caused intermittent init failures during bring-up.
+- **No series resistor needed on the RX line.** The DF1201S inputs are 3.3 V-tolerant, unlike the DFPlayer Mini's YX5200 chip (which needed a 1 kΩ on RX to limit clamp-diode current during power-on).
+- **No special VCC routing.** Wire 5 V from anywhere convenient on the rail — the Pro's init isn't as power-noise sensitive as the Mini was.
 - GPIO 18 and 19 are safe general-purpose pins that won't conflict with flash memory. (They're the chip's default VSPI CLK/MISO pins, but VSPI is never explicitly initialized in this firmware, so the pins are free for UART use.)
-- **TX/RX silkscreen labels on DFPlayer Mini boards are notoriously inconsistent across manufacturers.** If `mp3Player.begin()` fails at boot, swap the two data wires at the DFPlayer side as the first thing you try.
+- If `mp3Player.begin()` ever fails at boot, swap the two data wires at the DFPlayer side as the first diagnostic step — TX/RX silkscreen labels can still be inconsistent across batches.
 - The amplifier and DFPlayer share the 5V rail. Class-D amps switch hard and can inject supply noise; if you hear hiss/whine through the speakers, add a small bulk cap (100–470µF) right at the amp's VCC pin.
 
 ## Software Requirements
@@ -119,7 +118,7 @@ The first `pio run` will download all dependencies into `.pio/` (gitignored). De
 
 - `FastLED` — LED control (^3.7.0)
 - `PololuMaestro` — servo controller (^1.0.0)
-- `DFRobotDFPlayerMini` — MP3 player (^1.0.6)
+- `DFRobot_DF1201S` — MP3 player, pulled from GitHub (DFRobot/DFRobot_DF1201S)
 
 Adjust `upload_port` / `monitor_port` in `platformio.ini` if your board enumerates as a different serial device.
 
@@ -198,11 +197,11 @@ All serial port settings are centralized at the top of the sketch for easy confi
 #define MAESTRO_TX_PIN 17         // ESP32 TX (connects to Maestro RX)
 #define MAESTRO_BAUD 9600
 
-// DFPlayer Mini
+// DFPlayer Pro
 #define MP3_SERIAL_NUM 2          // Use Serial2
-#define MP3_RX_PIN 18             // ESP32 RX (connects to DFPlayer TX)
-#define MP3_TX_PIN 19             // ESP32 TX (connects to DFPlayer RX via 1kΩ)
-#define MP3_BAUD 9600
+#define MP3_RX_PIN 18             // ESP32 RX (connects to DFPlayer Pro TX)
+#define MP3_TX_PIN 19             // ESP32 TX (connects to DFPlayer Pro RX)
+#define MP3_BAUD 115200           // DF1201S native baud
 ```
 
 **To disable Maestro**: Set `MAESTRO_ENABLED false` if the Maestro board is not connected. The system will operate normally with LEDs and sound, skipping servo commands.
@@ -268,7 +267,7 @@ The brightness is applied automatically through scaling functions:
 
 ### Available Emotes
 
-Emotes trigger a Maestro servo sequence. While the servo script runs, the firmware fills the soundstage with **random short audio clips** drawn from the SD card library (see [MP3 Player Setup](#mp3-player-setup) for how the library is structured). Tracks that are still playing when the servo script ends are allowed to finish naturally; once the player goes idle after the sequence ends, the droid stays silent until the next emote fires. Emotes do **not** touch the eyes — to change eye color, use the **Eye Colors** buttons below.
+Emotes trigger a Maestro servo sequence. While the servo script runs, the firmware fills the soundstage with **random short audio clips** drawn from the DFPlayer Pro's onboard flash library (see [MP3 Player Setup](#mp3-player-setup) for how the library is structured). Tracks that are still playing when the servo script ends are allowed to finish naturally; once the player goes idle after the sequence ends, the droid stays silent until the next emote fires. Emotes do **not** touch the eyes — to change eye color, use the **Eye Colors** buttons below.
 
 | Emote | Maestro Script | Audio | Description |
 |-------|----------------|-------|-------------|
@@ -403,24 +402,34 @@ Or use RGB values: `CRGB(255, 128, 0)` for custom colors.
 
 ### How audio works in this build
 
-The firmware does **not** assign specific tracks to specific emotes. Instead, while any non-silent emote's Maestro animation is running, the firmware picks a **random track** from the SD card library every time the player goes idle, producing continuous chatter for the duration of the sequence. Tracks that are still playing when the script ends are left to finish naturally; the droid then stays silent until the next emote fires. The library size (currently **141 tracks**) is configured at the top of `src/main.cpp`:
+The firmware does **not** assign specific tracks to specific emotes. Instead, while any non-silent emote's Maestro animation is running, the firmware picks a **random track** from the onboard flash library every time the player goes idle, producing continuous chatter for the duration of the sequence. Tracks that are still playing when the script ends are left to finish naturally; the droid then stays silent until the next emote fires. The library size (currently **141 tracks**) is configured at the top of `src/main.cpp`:
 
 ```cpp
 #define AUDIO_TRACK_COUNT 141  // Random selection draws from [1, AUDIO_TRACK_COUNT]
 ```
 
-Both **MP3** and **WAV** files are supported, but **WAV files must be 16-bit signed PCM**, mono or stereo, at 8–44.1 kHz. IEEE Float WAV (the default macOS afconvert output), ADPCM-compressed WAV, and >44.1 kHz sample rates are **not** decoded — the chip will accept the play command and report "playing" but produce silence. If you have non-spec WAVs, convert them first (see below). Short clips (1–2 s) work especially well, since the random-refill cycle paints over each clip's end with a fresh one.
+The DFPlayer Pro supports **MP3, WAV, FLAC, AAC, WMA, APE** — much more permissive than the YX5200-based Mini was about WAV format quirks. PCM 16-bit mono 22.05 kHz WAV files work great and stay small (about 18 KB/sec), but the chip will also play higher-quality variants if you want them.
 
-### SD Card Preparation
+### Loading audio to onboard flash
 
-1. **Format the card FAT32.** Cards ≤32 GB work best. macOS's default `diskutil eraseDisk MS-DOS FAT32 DROIDSD MBRFormat /dev/diskN` is fine.
-2. **Create a folder named `mp3`** at the root.
-3. **Copy files into `/mp3/` in numerical order:** `0001.wav`, `0002.wav`, …. The firmware uses `playMp3Folder(N)` which addresses `/mp3/000N.*` by filename, so write order on the card doesn't strictly matter — but copying in order is still good hygiene.
-4. **Set `AUDIO_TRACK_COUNT`** in `src/main.cpp` to the number of files you have.
+1. **Connect the DFPlayer Pro to your Mac via USB-C** (the Pro's own port, not the ESP32's). It mounts as a removable drive (typically named `NO NAME`, ~125 MB).
+2. **Copy files to the root** in numerical order: `0001.wav`, `0002.wav`, …. The firmware uses `playFileNum(N)` which maps to the Nth audio file in physical write order. Non-audio entries (hidden folders, etc.) are filtered out by the chip.
+3. **Strip macOS metadata** before ejecting (see Gotcha below). If you don't, the AppleDouble sidecar files (`._0001.wav` etc.) can confuse the chip's enumeration.
+4. **Eject the volume**, disconnect USB-C, then reset the ESP32.
+5. **Set `AUDIO_TRACK_COUNT`** in `src/main.cpp` to the number of files you copied.
 
-### Converting WAVs to YX5200-compatible format
+**Gotcha: macOS metadata cruft.** When you copy files to a FAT volume from macOS, the OS scatters `._*` AppleDouble sidecars next to every file (4 KB each), plus `.Spotlight-V100` and `.fseventsd` folders. The chip's `getTotalFile()` query gets confused by these and may report `0`. Clean them up before ejecting:
 
-If your source audio is in a non-spec format (high sample rate, float, surround, etc.), use macOS's built-in `afconvert` to re-encode in place:
+```bash
+dot_clean -m /Volumes/NO\ NAME
+touch /Volumes/NO\ NAME/.metadata_never_index   # suppress future Spotlight
+sync
+diskutil eject /dev/diskN
+```
+
+### Converting WAVs to DFPlayer Pro-friendly format
+
+If your source audio is in an exotic format (24-bit, IEEE Float, etc.) and you'd like to keep file sizes small, use macOS's built-in `afconvert` to re-encode:
 
 ```bash
 afconvert -f WAVE -d LEI16@22050 -c 1 input.wav output.wav
@@ -430,7 +439,7 @@ afconvert -f WAVE -d LEI16@22050 -c 1 input.wav output.wav
 #                  Little-Endian Integer 16-bit (signed PCM)
 ```
 
-For batch conversion of a whole folder, see the patterns in `tools/` or write a quick `for f in *.wav; do afconvert ... ; done` loop. 16-bit / 22.05 kHz / mono produces audibly clean droid-style chatter at about 18 KB per second — plenty small even for tiny SD cards.
+For batch conversion of a whole folder, see the patterns in `tools/` or write a quick `for f in *.wav; do afconvert ... ; done` loop. 16-bit / 22.05 kHz / mono produces audibly clean droid-style chatter at about 18 KB per second — plenty small for 141 clips on the Pro's 128 MB onboard flash.
 
 ### Auditioning the clip library
 
@@ -445,21 +454,21 @@ Controls per file: **Enter**/**k** to keep, **d** to trash, **r** to replay, **s
 ### File Structure Example
 
 ```
-SD Card Root
-└── mp3/
-    ├── 0001.wav   ← /mp3/0001.wav, addressed by playMp3Folder(1)
-    ├── 0002.wav   ← /mp3/0002.wav
-    ├── 0003.mp3   ← mixed format is fine
-    ├── …
-    └── 0141.wav   ← last track (match AUDIO_TRACK_COUNT)
+DFPlayer Pro onboard storage (root)
+├── 0001.wav   ← addressed by playFileNum(1)
+├── 0002.wav
+├── 0003.mp3   ← mixed format is fine
+├── …
+└── 0141.wav   ← last track (match AUDIO_TRACK_COUNT)
 ```
 
 ### Troubleshooting MP3 Player
 
-- **Init fails (`begin()` returns false):** check the 1 kΩ resistor is in place on the RX line. If still failing, swap RX/TX wires at the DFPlayer side — silkscreen labels are inconsistent across DFPlayer Mini manufacturers. Verify VCC is from the ESP32 board's 5V pin, not a flying wire off the buck.
-- **Init succeeds but no audio at all:** check that the SD card is FAT32, the `mp3` folder exists at root, and files are named exactly `0001.xxx` …. Confirm WAV files are 16-bit PCM (use `file 0001.wav` — it should say `Microsoft PCM, 16 bit`, not `IEEE Float`).
+- **Init fails (`begin()` returns false):** swap RX/TX wires at the DFPlayer Pro side as the first thing — silkscreen labels can be inconsistent across batches. Check 5 V on VIN with a multimeter while powered.
+- **`Total files: 0` even though files are on the chip:** the chip is probably stuck in UFDISK mode (USB host) instead of MUSIC mode. The firmware calls `switchFunction(MUSIC)` in setup, which usually resolves this — but if you keep seeing 0, the macOS metadata cruft (AppleDouble `._*` sidecars, `.Spotlight-V100`, `.fseventsd`) may be confusing the chip. Plug the Pro back into the Mac via USB-C, run `dot_clean -m /Volumes/NO\ NAME`, `touch /Volumes/NO\ NAME/.metadata_never_index`, `sync`, eject, and reset.
+- **Init succeeds but no audio:** confirm the DROK amp is powered and turned up. Try the chip's built-in SPK_1/SPK_2 amp into any small speaker as a sanity check, bypassing the DROK.
 - **Audio plays for a few tracks then stops, ESP32 resets:** brownout from current draw. Move from USB power to the buck converter, or reduce volume.
-- **Volume too quiet:** the production firmware sets `volume(30)` (max). Adjust in `setup()` if needed.
+- **Volume too quiet:** the production firmware sets `setVol(30)` (max). Adjust in `setup()` if needed.
 
 ## Maestro Servo Configuration
 
@@ -622,17 +631,15 @@ Debug mode shows:
 
 **Problem**: No sound
 - Check serial monitor for initialization errors
-- Verify serial connections match configuration (default: GPIO 18 RX, GPIO 19 TX)
+- Verify serial connections match configuration (default: GPIO 18 RX, GPIO 19 TX, baud 115200)
 - Check pin assignments in `MP3_RX_PIN` and `MP3_TX_PIN` definitions
-- Verify SD card is inserted and formatted (FAT32)
 - Check speaker connections
-- Adjust volume: `mp3Player.setVolume(25);`
-- A 1 kΩ resistor is required in series on the DFPlayer's RX line (between ESP32 GPIO 19 and DFPlayer pin 2)
+- Adjust volume: `mp3Player.setVol(25);` (DFPlayer Pro accepts 0–30)
+- If `getTotalFile()` reports 0, see the "macOS metadata cruft" gotcha in [MP3 Player Setup](#mp3-player-setup)
 
-**Problem**: Wrong track plays
-- Verify file naming: `0001.mp3`, `0002.mp3`, etc.
-- Check SD card folder structure
-- Ensure track numbers match emote definitions
+**Problem**: Wrong file plays
+- Verify file naming: `0001.wav`, `0002.wav`, etc., at the root of the DFPlayer Pro's onboard flash
+- The firmware uses `playFileNum(N)` (Nth audio file in physical write order). If files weren't copied in numerical order, the mapping will be off; reformat the Pro via USB-C and copy files again in order.
 
 ## Serial Monitor Output
 
@@ -749,13 +756,13 @@ This system is designed to run from an **18V battery** with buck converters:
 This project uses the following open-source libraries:
 - FastLED (MIT License)
 - PololuMaestro (MIT License)
-- DFRobotDFPlayerMini (MIT License)
+- DFRobot_DF1201S (MIT License)
 
 ## Credits
 
 - FastLED Library: Daniel Garcia
 - PololuMaestro Library: Pololu Corporation
-- DFRobotDFPlayerMini Library: DFRobot
+- DFRobot_DF1201S Library: DFRobot
 - WiFi Web Server Example: Rui Santos (randomnerdtutorials.com)
 
 ## Support
@@ -770,7 +777,13 @@ For issues or questions:
 
 External references consulted during development — useful starting points for hardware datasheets, library docs, and integration notes when extending the system.
 
-### DFPlayer Mini (v1.17)
+### DFPlayer Pro (v1.19)
+
+- [DFRobot Wiki — DFPlayer Pro SKU:DFR0768](https://wiki.dfrobot.com/DFPlayer_PRO_SKU_DFR0768) (datasheet, pinout, AT command reference)
+- [DFRobot_DF1201S — GitHub repository](https://github.com/DFRobot/DFRobot_DF1201S) (library source, example sketches)
+- [DFPlayer Pro — DFRobot product page](https://www.dfrobot.com/product-2232.html)
+
+### DFPlayer Mini (v1.17, reverted v1.19 — kept for reference)
 
 - [DFRobot Wiki — DFPlayer Mini SKU:DFR0299](https://wiki.dfrobot.com/DFPlayer_Mini_SKU_DFR0299) (datasheet, pinout, library)
 - [DFRobotDFPlayerMini — GitHub repository](https://github.com/DFRobot/DFRobotDFPlayerMini) (library source, examples, notification types)
@@ -784,6 +797,17 @@ External references consulted during development — useful starting points for 
 - [ESP32 Tutorial: Mini MP3 Player Module](https://esp32io.com/tutorials/esp32-mini-mp3-player-module) (wiring, library API walk-through)
 
 ## Version History
+
+- **v1.19**: Swapped audio hardware to DFPlayer Pro (DFR0768); eliminated SD card from the audio path
+  - **Hardware change.** Replaced the DFPlayer Mini with a DFPlayer Pro. The Mini's SD card socket was getting jostled by the puppet's movement during operation, crashing playback. The Pro has 128 MB of onboard flash storage instead — files load via USB-C from the Mac, no removable card to vibrate loose. Audio uptime since the swap has been rock-solid.
+  - **Library:** `dfrobot/DFRobotDFPlayerMini` → `DFRobot/DFRobot_DF1201S` (installed from GitHub URL in `lib_deps`). Completely different chip family (the Pro uses an AT-command protocol at 115200 baud rather than the Mini's YX5200 binary protocol at 9600 baud); the library API is a clean rewrite.
+  - **Baud rate:** 9600 → 115200.
+  - **New init step:** `mp3Player.switchFunction(mp3Player.MUSIC)` must be called after `begin()`. Without it the chip stays in UFDISK (USB host) mode after a USB-C disconnect and reports `getTotalFile() == 0`. Two-second settle delay after the switchFunction call lets the chip re-scan its onboard flash.
+  - **Method renames:** `mp3Player.volume(N)` → `mp3Player.setVol(N)`, `mp3Player.playMp3Folder(N)` → `mp3Player.playFileNum(N)` (or `playSpecFile("/000N.wav")` for explicit filename addressing).
+  - **Audio refill back to polling.** The DF1201S library doesn't expose async notifications like the Mini's `DFPlayerPlayFinished` packets, but `mp3Player.isPlaying()` is reliable on this chip (unlike the YX5200), so the refill loop polls it in the existing rate-limited Maestro poll cycle.
+  - **Wiring simplification:** the 1 kΩ resistor on the RX line is no longer required (the Pro's UART inputs are 3.3 V-tolerant), and the "must tap VCC from the ESP32 board's 5 V pin" requirement is gone (the Pro's init isn't power-rail-noise-sensitive the way the Mini's was).
+  - **File loading workflow** documented for the new USB-C path, including the macOS-metadata-cruft gotcha that confuses `getTotalFile()`. `dot_clean -m` plus `touch .metadata_never_index` keeps the chip happy.
+  - The Pro is more permissive about audio formats than the YX5200-based Mini was — FLAC, AAC, WMA, and APE are also supported in addition to MP3 and WAV. Our existing 16-bit PCM mono 22050 Hz WAV library carries over directly with no re-conversion.
 
 - **v1.18**: Eye brightness 50 → 100; eye-color buttons no longer cancel idle mode
   - `EYE_BRIGHTNESS` raised from 50 → 100 so the eyes read more clearly under typical lighting.
