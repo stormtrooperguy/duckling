@@ -105,7 +105,7 @@ bool audioPlaying = false;
 // Tested working with WAV files (PCM 16-bit mono 22050 Hz) prepared via:
 //   afconvert -f WAVE -d LEI16@22050 -c 1 input.wav output.wav
 // MP3 files work too. See README "MP3 Player Setup" for full prep details.
-#define AUDIO_TRACK_COUNT 250
+#define AUDIO_TRACK_COUNT 141
 
 // True while a Maestro-driven emote animation is in progress. Set by
 // triggerButton() when a non-silent emote with a script is dispatched;

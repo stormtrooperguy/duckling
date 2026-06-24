@@ -403,10 +403,10 @@ Or use RGB values: `CRGB(255, 128, 0)` for custom colors.
 
 ### How audio works in this build
 
-The firmware does **not** assign specific tracks to specific emotes. Instead, while any non-silent emote's Maestro animation is running, the firmware picks a **random track** from the SD card library every time the player goes idle, producing continuous chatter for the duration of the sequence. Tracks that are still playing when the script ends are left to finish naturally; the droid then stays silent until the next emote fires. The library size (currently **250 tracks**) is configured at the top of `src/main.cpp`:
+The firmware does **not** assign specific tracks to specific emotes. Instead, while any non-silent emote's Maestro animation is running, the firmware picks a **random track** from the SD card library every time the player goes idle, producing continuous chatter for the duration of the sequence. Tracks that are still playing when the script ends are left to finish naturally; the droid then stays silent until the next emote fires. The library size (currently **141 tracks**) is configured at the top of `src/main.cpp`:
 
 ```cpp
-#define AUDIO_TRACK_COUNT 250  // Random selection draws from [1, AUDIO_TRACK_COUNT]
+#define AUDIO_TRACK_COUNT 141  // Random selection draws from [1, AUDIO_TRACK_COUNT]
 ```
 
 Both **MP3** and **WAV** files are supported, but **WAV files must be 16-bit signed PCM**, mono or stereo, at 8–44.1 kHz. IEEE Float WAV (the default macOS afconvert output), ADPCM-compressed WAV, and >44.1 kHz sample rates are **not** decoded — the chip will accept the play command and report "playing" but produce silence. If you have non-spec WAVs, convert them first (see below). Short clips (1–2 s) work especially well, since the random-refill cycle paints over each clip's end with a fresh one.
@@ -451,7 +451,7 @@ SD Card Root
     ├── 0002.wav   ← /mp3/0002.wav
     ├── 0003.mp3   ← mixed format is fine
     ├── …
-    └── 0250.wav
+    └── 0141.wav   ← last track (match AUDIO_TRACK_COUNT)
 ```
 
 ### Troubleshooting MP3 Player
