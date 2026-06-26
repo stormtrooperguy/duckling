@@ -798,6 +798,9 @@ External references consulted during development — useful starting points for 
 
 ## Version History
 
+- **v1.21**: Silence the DFPlayer Pro's "music" voice prompt on boot
+  - The DFPlayer Pro announces its current mode out loud when `switchFunction()` runs (i.e. says "music" every boot). Calling `mp3Player.setPrompt(false)` before `switchFunction()` suppresses it. The setting persists to the chip's internal flash, but the firmware re-applies it every boot for safety/idempotence.
+
 - **v1.20**: Cut first-track audio latency
   - The v1.19 refactor moved audio refill into the rate-limited (~150 ms) Maestro poll cycle. That's the right cadence for *refills* (querying `isPlaying()` faster than the chip can transition state risks re-firing `playFileNum()` and interrupting the just-issued track), but it added up to ~150 ms of slack between the servo starting and the audio starting — noticeable.
   - Fix: the FIRST track of each animation now fires immediately in `triggerButton()` right after `maestro.restartScript()`. Subsequent refills stay in the rate-limited block. Best of both: instant audio kickoff *and* no risk of self-interruption during the play.

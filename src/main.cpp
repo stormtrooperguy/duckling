@@ -255,6 +255,12 @@ void setup() {
     mp3PlayerAvailable = false;
   } else {
     Serial.println("MP3 player initialized successfully");
+    // Suppress the chip's voice prompt that announces mode changes (e.g.
+    // saying "music" when we call switchFunction below). This setting
+    // persists to the chip's internal flash, so it survives power cycles —
+    // but calling it every boot is idempotent and free.
+    mp3Player.setPrompt(false);
+    delay(100);
     // CRITICAL: switch the chip to MUSIC mode. After a USB-C disconnect the
     // chip may still be in UFDISK mode (acting as a removable drive rather
     // than playing files). Without this, getTotalFile() returns 0 and
