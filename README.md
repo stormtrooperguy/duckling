@@ -798,6 +798,11 @@ External references consulted during development — useful starting points for 
 
 ## Version History
 
+- **v1.20**: Cut first-track audio latency
+  - The v1.19 refactor moved audio refill into the rate-limited (~150 ms) Maestro poll cycle. That's the right cadence for *refills* (querying `isPlaying()` faster than the chip can transition state risks re-firing `playFileNum()` and interrupting the just-issued track), but it added up to ~150 ms of slack between the servo starting and the audio starting — noticeable.
+  - Fix: the FIRST track of each animation now fires immediately in `triggerButton()` right after `maestro.restartScript()`. Subsequent refills stay in the rate-limited block. Best of both: instant audio kickoff *and* no risk of self-interruption during the play.
+  - The DFPlayer Pro's intrinsic 100–300 ms chip latency (UART → flash read → decode start) is unfixable in firmware; this change addresses only the firmware-side slack.
+
 - **v1.19**: Swapped audio hardware to DFPlayer Pro (DFR0768); eliminated SD card from the audio path
   - **Hardware change.** Replaced the DFPlayer Mini with a DFPlayer Pro. The Mini's SD card socket was getting jostled by the puppet's movement during operation, crashing playback. The Pro has 128 MB of onboard flash storage instead — files load via USB-C from the Mac, no removable card to vibrate loose. Audio uptime since the swap has been rock-solid.
   - **Library:** `dfrobot/DFRobotDFPlayerMini` → `DFRobot/DFRobot_DF1201S` (installed from GitHub URL in `lib_deps`). Completely different chip family (the Pro uses an AT-command protocol at 115200 baud rather than the Mini's YX5200 binary protocol at 9600 baud); the library API is a clean rewrite.

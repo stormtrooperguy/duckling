@@ -439,9 +439,15 @@ void triggerButton(const Button &button, bool fromIdle = false) {
       #endif
       maestro.restartScript(button.scriptNumber);
       // Flag the animation as in progress unless this emote is explicitly
-      // silent. loop() will pick random tracks for the duration.
+      // silent. loop() will refill random tracks for the duration via the
+      // rate-limited poll block. The FIRST track fires here, right after
+      // the script kicks off, so audio starts in sync with the servo motion
+      // rather than waiting up to ~150ms for the next poll tick.
       if (!button.silent) {
         animationRunning = true;
+        if (mp3PlayerAvailable) {
+          mp3Player.playFileNum(random(1, AUDIO_TRACK_COUNT + 1));
+        }
       }
     } else {
       // Always show errors/warnings
@@ -732,8 +738,11 @@ void loop(){
       (millis() - lastScriptStatusCheck >= SCRIPT_STATUS_POLL_MS)) {
     lastScriptStatusCheck = millis();
 
-    // (1) Audio refill — only relevant during an active animation. Tracks
-    // already playing when the animation ends are allowed to finish naturally.
+    // (1) Audio refill — only relevant during an active animation. The
+    // FIRST track of each animation is fired immediately by triggerButton()
+    // for low latency; this block handles subsequent refills as tracks end.
+    // Tracks already playing when the animation ends are allowed to finish
+    // naturally (we never call stop()).
     if (animationRunning && mp3PlayerAvailable && !mp3Player.isPlaying()) {
       mp3Player.playFileNum(random(1, AUDIO_TRACK_COUNT + 1));
     }
