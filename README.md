@@ -798,6 +798,11 @@ External references consulted during development — useful starting points for 
 
 ## Version History
 
+- **v1.22**: Idle-mode bug fix — silent emotes no longer wedge idle
+  - **Bug:** when idle mode randomly selected the `sleep` emote (the only one with `silent = true`), idle would advance one more time and then permanently lock. The droid stayed responsive to manual button presses, but idle stopped firing new emotes.
+  - **Root cause:** v1.13's `silent` flag had a side effect — `animationRunning` was only set when `!button.silent`. The rate-limited Maestro-poll block in `loop()` was gated on `animationRunning || pendingColorRestore`, so for silent emotes neither condition was true and the block never ran. Script-end detection never fired → `idleSequenceRunning` stayed `true` forever → idle could never schedule the next emote.
+  - **Fix:** decoupled "is a Maestro script running" from "should we be playing audio." Renamed `animationRunning` → `scriptRunning` (always set when *any* emote's script fires, silent or not) and added a separate `currentEmoteSilent` flag that the audio refill check uses to skip firing tracks. The rate-limited block now runs for sleep too; script-end detection fires; idle advances correctly.
+
 - **v1.21**: Silence the DFPlayer Pro's "music" voice prompt on boot
   - The DFPlayer Pro announces its current mode out loud when `switchFunction()` runs (i.e. says "music" every boot). Calling `mp3Player.setPrompt(false)` before `switchFunction()` suppresses it. The setting persists to the chip's internal flash, but the firmware re-applies it every boot for safety/idempotence.
 

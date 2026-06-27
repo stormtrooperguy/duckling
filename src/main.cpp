@@ -98,11 +98,15 @@ bool mp3PlayerAvailable = false;    // Track if MP3 player initialized successfu
 // MP3, FLAC, AAC, WMA, APE). See README "MP3 Player Setup" for prep details.
 #define AUDIO_TRACK_COUNT 141
 
-// True while a Maestro-driven emote animation is in progress. Set by
-// triggerButton() when a non-silent emote with a script is dispatched;
-// cleared in loop() when the Maestro reports the script has stopped.
-// Drives the "play random audio if nothing is playing" logic.
-bool animationRunning = false;
+// True while a Maestro script is running on behalf of an emote. Set by
+// triggerButton() whenever a script is dispatched (silent or not — must
+// stay set even for silent emotes so the rate-limited poll block detects
+// the script ending and advances idle mode to the next emote).
+bool scriptRunning = false;
+
+// When scriptRunning is true, this tracks whether the current emote
+// suppresses audio (button.silent). Used by the audio refill check.
+bool currentEmoteSilent = false;
 
 // FastLED library
 #include <FastLED.h>
@@ -444,16 +448,16 @@ void triggerButton(const Button &button, bool fromIdle = false) {
         Serial.println(button.scriptNumber);
       #endif
       maestro.restartScript(button.scriptNumber);
-      // Flag the animation as in progress unless this emote is explicitly
-      // silent. loop() will refill random tracks for the duration via the
-      // rate-limited poll block. The FIRST track fires here, right after
-      // the script kicks off, so audio starts in sync with the servo motion
-      // rather than waiting up to ~150ms for the next poll tick.
-      if (!button.silent) {
-        animationRunning = true;
-        if (mp3PlayerAvailable) {
-          mp3Player.playFileNum(random(1, AUDIO_TRACK_COUNT + 1));
-        }
+      // Flag the script as in progress so loop()'s rate-limited block will
+      // detect the end and advance idle mode. Track silent-ness separately
+      // so the audio refill check can skip firing for silent emotes.
+      scriptRunning = true;
+      currentEmoteSilent = button.silent;
+      // Fire the first random track immediately (unless silent) so audio
+      // kicks off in sync with the servo motion. Subsequent refills happen
+      // in the rate-limited block.
+      if (!button.silent && mp3PlayerAvailable) {
+        mp3Player.playFileNum(random(1, AUDIO_TRACK_COUNT + 1));
       }
     } else {
       // Always show errors/warnings
@@ -733,30 +737,31 @@ void loop(){
   //   1. Audio refill: poll mp3Player.isPlaying() and fire the next random
   //      track when the chip goes idle. The DF1201S's isPlaying() reports
   //      reliably (unlike the YX5200-based chips we tried earlier).
-  //   2. Animation-end detection via getScriptStatus(): clear animationRunning
-  //      and advance idle mode to its next-emote scheduler.
+  //   2. Script-end detection via getScriptStatus(): clear scriptRunning
+  //      and advance idle mode to its next-emote scheduler. MUST run for
+  //      silent emotes (sleep) too, or idle gets stuck when sleep fires.
   //   3. Pre-emote eye-color restore (extension point — currently unused,
   //      but kept wired up for future flexibility).
   //
   // All hardware ops stay single-threaded inside loop() — no concurrent
   // access with the async network task.
-  if ((animationRunning || pendingColorRestore) && maestroAvailable &&
+  if ((scriptRunning || pendingColorRestore) && maestroAvailable &&
       (millis() - lastScriptStatusCheck >= SCRIPT_STATUS_POLL_MS)) {
     lastScriptStatusCheck = millis();
 
-    // (1) Audio refill — only relevant during an active animation. The
+    // (1) Audio refill — only relevant during a non-silent animation. The
     // FIRST track of each animation is fired immediately by triggerButton()
     // for low latency; this block handles subsequent refills as tracks end.
     // Tracks already playing when the animation ends are allowed to finish
     // naturally (we never call stop()).
-    if (animationRunning && mp3PlayerAvailable && !mp3Player.isPlaying()) {
+    if (scriptRunning && !currentEmoteSilent && mp3PlayerAvailable && !mp3Player.isPlaying()) {
       mp3Player.playFileNum(random(1, AUDIO_TRACK_COUNT + 1));
     }
 
-    // (2) Animation-end detection.
+    // (2) Script-end detection.
     if (maestro.getScriptStatus() == 1) {  // 1 = script stopped
-      bool wasAnimation = animationRunning || pendingColorRestore;
-      animationRunning = false;
+      bool wasRunning = scriptRunning || pendingColorRestore;
+      scriptRunning = false;
 
       if (pendingColorRestore) {
         noInterrupts();
@@ -768,7 +773,7 @@ void loop(){
         pendingColorRestore = false;
       }
 
-      if (idleMode && wasAnimation) {
+      if (idleMode && wasRunning) {
         idleSequenceRunning = false;
         idleNextEmoteTime = millis() + random(IDLE_MIN_DELAY_MS, IDLE_MAX_DELAY_MS);
       }
